@@ -23,6 +23,12 @@ export const useGameStore = defineStore('game', () => {
   const pendingInviteCode = ref(null);
   const roomError = ref('');
   const spotifyLinked = ref(false);
+  const jellyfinLinked = ref(false);
+  const jellyfinServerUrl = ref(localStorage.getItem('jellyfin_server_url') || '');
+  const jellyfinCode = ref(null);
+  const jellyfinSecret = ref(null);
+  const jellyfinConnecting = ref(false);
+  let jellyfinPollInterval = null;
   const copySuccess = ref(false);
 
   const currentTrack = ref(null);
@@ -62,35 +68,66 @@ export const useGameStore = defineStore('game', () => {
     socket.emit('list_active_rooms');
   }
 
-  async function loadSpotifyTracks(spotifyToken) {
-    const fetchRecent = fetch(`${API_BASE}/user-recent-tracks?token=${spotifyToken}`)
-      .then((res) => res.json())
-      .catch(() => []);
-
-    const fetchTop = fetch(`${API_BASE}/user-top-tracks?token=${spotifyToken}`)
-      .then((res) => res.json())
-      .catch(() => []);
-
-    const [recentItems, topItems] = await Promise.all([fetchRecent, fetchTop]);
-    const formattedTopItems = (topItems || []).map((track) => ({ track }));
-    const allItems = [...(recentItems || []), ...formattedTopItems];
-
-    const seenIds = new Set();
-    const uniqueItems = [];
-    for (const item of allItems) {
-      if (item?.track?.id && !seenIds.has(item.track.id)) {
-        seenIds.add(item.track.id);
-        uniqueItems.push(item);
-      }
+  async function fetchTracks(endpoint) {
+    const res = await fetch(endpoint);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const err = new Error(data.error || "Impossible de récupérer les morceaux.");
+      err.code = data.code;
+      err.details = data.details;
+      throw err;
     }
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error("Format de réponse de l'API invalide.");
+    }
+    return data;
+  }
 
-    socket.emit('store_tracks', uniqueItems);
-    spotifyLinked.value = true;
+  async function loadSpotifyTracks(spotifyToken) {
+    roomError.value = '';
+    try {
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${spotifyToken}&provider=spotify`);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${spotifyToken}&provider=spotify`);
+
+      const allTracks = [...recentTracks, ...topTracks];
+      const seenIds = new Set();
+      const uniqueTracks = [];
+      for (const track of allTracks) {
+        if (track?.id && !seenIds.has(track.id)) {
+          seenIds.add(track.id);
+          uniqueTracks.push(track);
+        }
+      }
+
+      if (uniqueTracks.length === 0) {
+        throw new Error("Aucun morceau trouvé dans votre bibliothèque Spotify.");
+      }
+
+      socket.emit('store_tracks', uniqueTracks);
+      spotifyLinked.value = true;
+    } catch (err) {
+      console.error("Erreur Spotify tracks loading:", err);
+      roomError.value = {
+        message: err.message,
+        code: err.code || 'API_ERROR',
+        details: err.details || '',
+        provider: 'spotify'
+      };
+      spotifyLinked.value = false;
+    }
   }
 
   function bindSocketListeners(router) {
     if (listenersBound) return;
     listenersBound = true;
+
+    window.addEventListener('message', async (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'spotify_token') {
+        await loadSpotifyTracks(event.data.token);
+      }
+    });
 
     socket.on('active_rooms', (rooms) => {
       activeRooms.value = rooms;
@@ -179,6 +216,12 @@ export const useGameStore = defineStore('game', () => {
     if (!spotifyToken || oauthHandled) return;
     oauthHandled = true;
 
+    if (window.opener) {
+      window.opener.postMessage({ type: 'spotify_token', token: spotifyToken }, window.location.origin);
+      window.close();
+      return;
+    }
+
     const savedName = sanitizeInput(localStorage.getItem('player_name') || 'Anonyme');
     const codeToJoin = localStorage.getItem('active_room_code') || pendingInviteCode.value;
 
@@ -226,12 +269,20 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function spotifyLogin() {
+    roomError.value = '';
     const safeName = requireName();
     if (!safeName) return;
     if (roomCode.value) {
       localStorage.setItem('active_room_code', roomCode.value);
     }
-    window.location.href = `${API_BASE}/login`;
+    const width = 600, height = 800;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+    window.open(
+      `${API_BASE}/auth/spotify/login`,
+      'Spotify Login',
+      `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
+    );
   }
 
   function updateSettings(partial) {
@@ -270,6 +321,117 @@ export const useGameStore = defineStore('game', () => {
     socket.emit('next_round');
   }
 
+  async function initiateJellyfin(serverUrl) {
+    roomError.value = '';
+    const cleanUrl = serverUrl.trim().replace(/\/$/, '');
+    if (!cleanUrl) {
+      alert('Veuillez saisir une URL de serveur Jellyfin.');
+      return;
+    }
+    localStorage.setItem('jellyfin_server_url', cleanUrl);
+    jellyfinServerUrl.value = cleanUrl;
+    jellyfinConnecting.value = true;
+    jellyfinCode.value = null;
+    jellyfinSecret.value = null;
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/jellyfin/initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverUrl: cleanUrl }),
+      });
+      if (!res.ok) throw new Error("Erreur d'initialisation");
+      const data = await res.json();
+      jellyfinCode.value = data.code;
+      jellyfinSecret.value = data.secret;
+
+      if (jellyfinPollInterval) clearInterval(jellyfinPollInterval);
+      jellyfinPollInterval = setInterval(() => pollJellyfin(cleanUrl, data.secret), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Impossible de contacter le serveur Jellyfin via le backend. Vérifiez l'URL.");
+      jellyfinConnecting.value = false;
+    }
+  }
+
+  async function pollJellyfin(serverUrl, secret) {
+    try {
+      const res = await fetch(`${API_BASE}/auth/jellyfin/authenticate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverUrl, secret }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      if (data && data.token) {
+        clearInterval(jellyfinPollInterval);
+        jellyfinPollInterval = null;
+        jellyfinCode.value = null;
+        jellyfinSecret.value = null;
+        jellyfinConnecting.value = false;
+
+        await loadJellyfinTracks(data.token, serverUrl, data.userId);
+      }
+    } catch (err) {
+      // Ignorer
+    }
+  }
+
+  async function loadJellyfinTracks(token, serverUrl, userId) {
+    roomError.value = '';
+    try {
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${token}&provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${userId}`);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${token}&provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${userId}`);
+
+      const allTracks = [...recentTracks, ...topTracks];
+      const seenIds = new Set();
+      const uniqueTracks = [];
+      for (const track of allTracks) {
+        if (track?.id && !seenIds.has(track.id)) {
+          seenIds.add(track.id);
+          uniqueTracks.push(track);
+        }
+      }
+
+      if (uniqueTracks.length === 0) {
+        throw new Error("Aucun morceau trouvé sur votre serveur Jellyfin.");
+      }
+
+      socket.emit('store_tracks', uniqueTracks);
+      jellyfinLinked.value = true;
+    } catch (err) {
+      console.error("Erreur Jellyfin tracks loading:", err);
+      roomError.value = {
+        message: err.message,
+        code: err.code || 'API_ERROR',
+        details: err.details || '',
+        provider: 'jellyfin'
+      };
+      jellyfinLinked.value = false;
+    }
+  }
+
+  function clearRoomError() {
+    roomError.value = '';
+  }
+
+  function cancelJellyfin() {
+    if (jellyfinPollInterval) {
+      clearInterval(jellyfinPollInterval);
+      jellyfinPollInterval = null;
+    }
+    jellyfinCode.value = null;
+    jellyfinSecret.value = null;
+    jellyfinConnecting.value = false;
+  }
+
+  const linkedProvider = computed(() => {
+    if (spotifyLinked.value) return 'spotify';
+    if (jellyfinLinked.value) return 'jellyfin';
+    return null;
+  });
+
   return {
     name,
     players,
@@ -306,5 +468,13 @@ export const useGameStore = defineStore('game', () => {
     startGame,
     submitGuess,
     nextRound,
+    jellyfinLinked,
+    jellyfinServerUrl,
+    jellyfinCode,
+    jellyfinConnecting,
+    initiateJellyfin,
+    cancelJellyfin,
+    linkedProvider,
+    clearRoomError,
   };
 });

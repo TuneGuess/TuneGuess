@@ -12,10 +12,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/login': 'http://127.0.0.1:5000',
-      '/callback': 'http://127.0.0.1:5000',
-      '/user-top-tracks': 'http://127.0.0.1:5000',
-      '/user-recent-tracks': 'http://127.0.0.1:5000',
+      '/auth': 'http://127.0.0.1:5000',
+      '/api': 'http://127.0.0.1:5000',
       '/socket.io': {
         target: 'http://127.0.0.1:5000',
         ws: true,
