@@ -86,35 +86,68 @@ function correctPlayerName() {
 <template>
   <div v-if="game.currentTrack">
     <div
-      class="fixed inset-0 z-[-1] transition-all duration-1000"
+      class="fixed inset-0 z-[-1] transition-all duration-1000 ease-out"
       :style="{
         backgroundImage: `url(${game.currentTrack.image})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        filter: 'blur(40px) brightness(0.35)',
-        transform: 'scale(1.1)',
+        filter: 'blur(48px) brightness(0.3) saturate(1.2)',
+        transform: 'scale(1.15)',
       }"
     />
+    <div class="fixed inset-0 z-[-1] bg-black/40" />
 
-    <div class="flex flex-col items-center gap-8 mt-4">
-      <span class="room-badge">{{ game.roomCode }}</span>
+    <div class="flex flex-col items-center gap-8 mt-2 pb-8">
+      <span
+        v-motion
+        :initial="{ opacity: 0, y: -10 }"
+        :enter="{ opacity: 1, y: 0 }"
+        class="room-badge"
+      >
+        {{ game.roomCode }}
+      </span>
 
-      <div class="glass-card p-8 w-full max-w-2xl text-center">
-        <h2 class="text-4xl font-black mb-6 italic">Qui a écouté ça ?</h2>
+      <div
+        v-motion
+        :initial="{ opacity: 0, y: 40, scale: 0.95 }"
+        :enter="{ opacity: 1, y: 0, scale: 1, transition: { duration: 700 } }"
+        class="glass-card p-6 md:p-10 w-full max-w-2xl text-center"
+      >
+        <h2 class="text-3xl md:text-4xl font-black mb-8 italic text-gradient">
+          Qui a écouté ça ?
+        </h2>
 
         <div class="mb-8">
-          <img
-            :src="game.currentTrack.image"
-            alt=""
-            class="w-48 h-48 mx-auto rounded-2xl mb-4 shadow-2xl"
-          />
-          <h3 class="text-2xl font-bold">{{ game.currentTrack.name }}</h3>
-          <p class="text-lg opacity-75">{{ game.currentTrack.artists }}</p>
-          <p class="text-sm opacity-50">{{ game.currentTrack.album }}</p>
+          <div class="relative w-52 h-52 mx-auto mb-6">
+            <div
+              class="absolute inset-0 rounded-full border-2 border-dashed border-white/20 vinyl-ring"
+              :class="{ paused: !isPlaying }"
+            />
+            <img
+              :src="game.currentTrack.image"
+              alt=""
+              class="w-44 h-44 mx-auto rounded-full object-cover shadow-2xl relative z-10 ring-4 ring-white/10 transition-transform duration-500"
+              :class="{ 'scale-105': isPlaying }"
+            />
+          </div>
+
+          <h3
+            v-motion
+            :initial="{ opacity: 0 }"
+            :enter="{ opacity: 1, transition: { delay: 200 } }"
+            class="text-2xl font-bold"
+          >
+            {{ game.currentTrack.name }}
+          </h3>
+          <p class="text-lg opacity-75 mt-1">{{ game.currentTrack.artists }}</p>
+          <p class="text-sm opacity-45">{{ game.currentTrack.album }}</p>
 
           <div
             v-if="game.currentTrack.preview_url"
-            class="mt-6 flex flex-col items-center w-full max-w-md mx-auto glass-card-sm p-4 gap-3"
+            v-motion
+            :initial="{ opacity: 0, y: 16 }"
+            :enter="{ opacity: 1, y: 0, transition: { delay: 350 } }"
+            class="mt-8 flex flex-col items-center w-full max-w-md mx-auto glass-card-sm p-5 gap-4"
           >
             <audio
               ref="audioRef"
@@ -126,7 +159,7 @@ function correctPlayerName() {
             <div class="flex items-center justify-between w-full px-2 gap-4">
               <button
                 type="button"
-                class="w-12 h-12 flex items-center justify-center rounded-full bg-white text-black hover:scale-105 transition shadow-lg cursor-pointer"
+                class="w-14 h-14 flex items-center justify-center rounded-full btn-primary shadow-lg cursor-pointer"
                 @click="togglePlay"
               >
                 <svg v-if="isPlaying" class="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -136,38 +169,38 @@ function correctPlayerName() {
                   <path d="M8 5v14l11-7z" />
                 </svg>
               </button>
-              <div class="flex items-end gap-1 h-8">
+              <div class="flex items-end gap-1 h-10">
                 <span
-                  v-for="i in 12"
+                  v-for="i in 16"
                   :key="i"
-                  class="w-1 bg-green-400 rounded-full"
-                  :class="{ 'animate-soundwave': isPlaying }"
+                  class="w-1 rounded-full transition-colors"
+                  :class="isPlaying ? 'bg-green-400 animate-soundwave' : 'bg-white/20'"
                   :style="{
-                    animationDelay: `${(i - 1) * 0.12}s`,
+                    animationDelay: `${(i - 1) * 0.08}s`,
                     height: isPlaying ? undefined : '6px',
                   }"
                 />
               </div>
             </div>
             <div class="w-full flex items-center gap-3">
-              <span class="text-xs opacity-50 font-mono">
+              <span class="text-xs opacity-50 font-mono w-10 text-right">
                 0:{{ Math.floor(currentTime).toString().padStart(2, '0') }}
               </span>
               <div
-                class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden cursor-pointer"
+                class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden cursor-pointer group"
                 @click="seek"
               >
                 <div
-                  class="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full"
+                  class="h-full bg-gradient-to-r from-green-400 via-emerald-400 to-violet-400 rounded-full transition-all duration-150 group-hover:shadow-[0_0_12px_rgba(74,222,128,0.5)]"
                   :style="{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }"
                 />
               </div>
-              <span class="text-xs opacity-50 font-mono">
+              <span class="text-xs opacity-50 font-mono w-10">
                 0:{{ Math.floor(duration || 30).toString().padStart(2, '0') }}
               </span>
             </div>
             <div class="flex items-center gap-3 w-full px-2 pt-2 border-t border-white/5">
-              <button type="button" class="text-white/70 hover:text-white cursor-pointer" @click="toggleMute">
+              <button type="button" class="text-lg opacity-70 hover:opacity-100 cursor-pointer transition" @click="toggleMute">
                 {{ volume === 0 ? '🔇' : '🔊' }}
               </button>
               <input
@@ -182,49 +215,69 @@ function correctPlayerName() {
           </div>
         </div>
 
-        <div v-if="!game.answerResult" class="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <button
-            v-for="player in game.gamePlayers"
-            :key="player.id"
-            type="button"
-            class="guess-btn bg-white/10 border border-white/20 p-4 rounded-2xl font-bold cursor-pointer"
-            @click="game.submitGuess(player.id)"
-          >
-            {{ player.name }}
-          </button>
-        </div>
-        <div v-else class="text-center">
-          <p
-            class="text-2xl font-black"
-            :class="game.answerResult.correct ? 'text-green-400' : 'text-red-400'"
-          >
-            {{ game.answerResult.correct ? 'Bonne réponse !' : 'Mauvaise réponse !' }}
-          </p>
-          <p class="mt-4 opacity-75">C'était {{ correctPlayerName() }}</p>
-          <button
-            v-if="game.isHost"
-            type="button"
-            class="mt-6 bg-blue-500 text-white px-6 py-3 rounded-full font-bold hover:scale-105 transition cursor-pointer"
-            @click="game.nextRound()"
-          >
-            Prochaine question
-          </button>
-        </div>
+        <Transition name="page" mode="out-in">
+          <div v-if="!game.answerResult" key="guess" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <button
+              v-for="(player, i) in game.gamePlayers"
+              :key="player.id"
+              v-motion
+              :initial="{ opacity: 0, scale: 0.85 }"
+              :visible="{ opacity: 1, scale: 1, transition: { delay: 400 + i * 70, type: 'spring' } }"
+              type="button"
+              class="guess-btn bg-white/8 border border-white/15 p-4 rounded-2xl font-bold cursor-pointer"
+              @click="game.submitGuess(player.id)"
+            >
+              {{ player.name }}
+            </button>
+          </div>
+          <div v-else key="result" class="text-center result-pop">
+            <p
+              class="text-3xl font-black"
+              :class="game.answerResult.correct ? 'text-green-400' : 'text-red-400'"
+            >
+              {{ game.answerResult.correct ? '🎉 Bonne réponse !' : '✗ Mauvaise réponse' }}
+            </p>
+            <p class="mt-4 opacity-75 text-lg">C'était <strong>{{ correctPlayerName() }}</strong></p>
+          </div>
+        </Transition>
+
+        <button
+          v-if="game.isHost"
+          type="button"
+          class="mt-8 bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-8 py-3 rounded-full font-bold transition shadow-[0_0_30px_rgba(99,102,241,0.35)] disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:scale-105 cursor-pointer"
+          :disabled="!game.canHostProceed"
+          :title="!game.canHostProceed ? 'Attendez que tout le monde réponde ou que le temps soit écoulé' : ''"
+          @click="game.nextRound()"
+        >
+          Prochaine question →
+        </button>
       </div>
 
-      <div class="glass-card p-6 w-full max-w-2xl">
-        <h3 class="text-xl font-bold mb-4">Scores</h3>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div
+        v-motion
+        :initial="{ opacity: 0, y: 30 }"
+        :enter="{ opacity: 1, y: 0, transition: { delay: 500, duration: 600 } }"
+        class="glass-card p-6 md:p-8 w-full max-w-2xl"
+      >
+        <h3 class="text-xl font-bold mb-5 flex items-center gap-2">
+          <span class="text-green-400">★</span> Scores
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div
-            v-for="p in game.sortedPlayers"
+            v-for="(p, i) in game.sortedPlayers"
             :key="p.id"
+            v-motion
+            :initial="{ opacity: 0, y: 12 }"
+            :visible="{ opacity: 1, y: 0, transition: { delay: 550 + i * 60 } }"
             class="score-card p-4 bg-white/5 rounded-2xl border border-white/10 text-center"
+            :class="{ 'ring-1 ring-green-400/30': i === 0 }"
           >
-            <p class="font-bold flex items-center justify-center gap-1">
+            <p class="font-bold flex items-center justify-center gap-1 text-sm">
+              <span v-if="i === 0" class="text-yellow-400 text-xs">#1</span>
               {{ p.name }}
               <span v-if="p.isHost" class="host-crown text-sm">👑</span>
             </p>
-            <p class="text-2xl text-green-400 font-black">{{ p.score }}</p>
+            <p class="text-2xl text-green-400 font-black mt-1">{{ p.score }}</p>
           </div>
         </div>
       </div>

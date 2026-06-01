@@ -290,6 +290,27 @@ function emitRoomPlayers(room: Room) {
   io.to(room.id).emit('update_players', room.players);
 }
 
+function emitRoundState(room: Room) {
+  io.to(room.id).emit('round_state', room.getRoundState(Date.now()));
+}
+
+function startRoundTimer(room: Room) {
+  const now = Date.now();
+  const durationMs = Math.max(10, Math.min(120, Math.floor(room.settings.roundDuration))) * 1000;
+  room.roundEndsAtMs = now + durationMs;
+
+  if (room.roundTimeout) {
+    clearTimeout(room.roundTimeout);
+    room.roundTimeout = null;
+  }
+
+  room.roundTimeout = setTimeout(() => {
+    // La manche est considérée terminée côté serveur (timeExpired=true),
+    // le leader pourra passer à la suivante.
+    emitRoundState(room);
+  }, durationMs);
+}
+
 io.on('connection', (socket: Socket) => {
   console.log('Connexion socket:', socket.id);
 
@@ -404,7 +425,9 @@ io.on('connection', (socket: Socket) => {
     }
 
     room.currentQuestion = result.selected;
+    startRoundTimer(room);
     io.to(room.id).emit('new_question', result.questionData);
+    emitRoundState(room);
   });
 
   socket.on('next_round', async () => {
@@ -412,12 +435,19 @@ io.on('connection', (socket: Socket) => {
     if (!room || room.status !== 'playing') return;
     if (room.creatorId !== socket.id) return;
 
+    const roundState = room.getRoundState(Date.now());
+    if (!roundState.canProceed) {
+      socket.emit('room_error', { message: "Impossible de passer à la suite : tous les joueurs n'ont pas répondu et le temps n'est pas écoulé." });
+      return;
+    }
+
     if (room.currentRound >= room.settings.maxRounds) {
       io.to(room.id).emit('game_over', {
         players: [...room.players].sort((a, b) => b.score - a.score),
       });
       room.status = 'waiting';
       room.currentQuestion = null;
+      room.resetForRound();
       broadcastActiveRooms();
       return;
     }
@@ -431,7 +461,9 @@ io.on('connection', (socket: Socket) => {
     }
 
     room.currentQuestion = result.selected;
+    startRoundTimer(room);
     io.to(room.id).emit('new_question', result.questionData);
+    emitRoundState(room);
   });
 
   socket.on('answer', ({ playerId, points }: { playerId: unknown; points: unknown }) => {
@@ -442,6 +474,15 @@ io.on('connection', (socket: Socket) => {
       const res = room.submitAnswer(socket.id, playerId as string, Number(points) || 0);
       socket.emit('answer_result', res);
       emitRoomPlayers(room);
+      emitRoundState(room);
+
+      // Si tout le monde a répondu, on peut arrêter le timer.
+      const state = room.getRoundState(Date.now());
+      if (state.allAnswered && room.roundTimeout) {
+        clearTimeout(room.roundTimeout);
+        room.roundTimeout = null;
+        emitRoundState(room);
+      }
     } catch (err) {
       // Ignorer
     }
@@ -469,6 +510,9 @@ io.on('connection', (socket: Socket) => {
       if (room.status === 'waiting') {
         io.to(roomId).emit('room_settings', room.settings);
       }
+      if (room.status === 'playing') {
+        emitRoundState(room);
+      }
     }
 
     broadcastActiveRooms();
@@ -490,6 +534,9 @@ io.on('connection', (socket: Socket) => {
       emitRoomPlayers(room);
       if (room.status === 'waiting') {
         broadcastActiveRooms();
+      }
+      if (room.status === 'playing') {
+        emitRoundState(room);
       }
     }
   });

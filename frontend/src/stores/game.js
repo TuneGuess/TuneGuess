@@ -36,6 +36,8 @@ export const useGameStore = defineStore('game', () => {
   const answerResult = ref(null);
   const startTime = ref(null);
   const gameOver = ref(null);
+  const roundState = ref(null);
+  const spotifyProfileName = ref(localStorage.getItem('spotify_profile_name') || '');
 
   const inviteLink = computed(() =>
     roomCode.value
@@ -87,6 +89,23 @@ export const useGameStore = defineStore('game', () => {
   async function loadSpotifyTracks(spotifyToken) {
     roomError.value = '';
     try {
+      // Récupérer le nom de profil Spotify (pour l'affichage dans la waiting)
+      try {
+        const meRes = await fetch('https://api.spotify.com/v1/me', {
+          headers: { Authorization: `Bearer ${spotifyToken}` },
+        });
+        if (meRes.ok) {
+          const me = await meRes.json();
+          const display = me?.display_name || me?.id || '';
+          if (display) {
+            spotifyProfileName.value = display;
+            localStorage.setItem('spotify_profile_name', display);
+          }
+        }
+      } catch {
+        // Non bloquant
+      }
+
       const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${spotifyToken}&provider=spotify`);
       const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${spotifyToken}&provider=spotify`);
 
@@ -164,11 +183,16 @@ export const useGameStore = defineStore('game', () => {
       answerResult.value = null;
       startTime.value = Date.now();
       gameOver.value = null;
+      roundState.value = null;
       router.push({ name: 'game' });
     });
 
     socket.on('answer_result', (result) => {
       answerResult.value = result;
+    });
+
+    socket.on('round_state', (state) => {
+      roundState.value = state;
     });
 
     socket.on('no_tracks', () => {
@@ -177,6 +201,7 @@ export const useGameStore = defineStore('game', () => {
 
     socket.on('game_over', (data) => {
       gameOver.value = data.players;
+      roundState.value = null;
       router.push({ name: 'waiting', params: { code: roomCode.value } });
     });
 
@@ -186,6 +211,7 @@ export const useGameStore = defineStore('game', () => {
       roomName.value = '';
       players.value = [];
       isHost.value = false;
+      roundState.value = null;
       localStorage.removeItem('active_room_code');
       router.push({ name: 'lobby' });
       refreshActiveRooms();
@@ -432,6 +458,12 @@ export const useGameStore = defineStore('game', () => {
     return null;
   });
 
+  const canHostProceed = computed(() => {
+    if (!isHost.value) return false;
+    if (!roundState.value) return false;
+    return !!roundState.value.canProceed;
+  });
+
   return {
     name,
     players,
@@ -451,9 +483,12 @@ export const useGameStore = defineStore('game', () => {
     answerResult,
     startTime,
     gameOver,
+    roundState,
+    spotifyProfileName,
     inviteLink,
     canLaunch,
     sortedPlayers,
+    canHostProceed,
     MAX_NAME_LENGTH,
     setName,
     requireName,

@@ -12,10 +12,12 @@ export class Room {
   public playerTracks: Record<string, GenericTrack[]> = {};
   public currentQuestion: { track: GenericTrack; playerId: string } | null = null;
   public answeredPlayers = new Set<string>();
+  public roundEndsAtMs: number | null = null;
   public status: 'waiting' | 'playing' = 'waiting';
   public settings: RoomSettings = { maxRounds: 10, roundDuration: 30 };
   public currentRound = 0;
   public playedTrackIds = new Set<string>();
+  public roundTimeout: NodeJS.Timeout | null = null;
 
   constructor(
     public readonly id: string,
@@ -165,5 +167,26 @@ export class Room {
 
   public resetForRound(): void {
     this.answeredPlayers = new Set<string>();
+    this.roundEndsAtMs = null;
+    if (this.roundTimeout) {
+      clearTimeout(this.roundTimeout);
+      this.roundTimeout = null;
+    }
+  }
+
+  public getRoundState(nowMs: number) {
+    const totalPlayers = this.players.length;
+    const answeredCount = this.answeredPlayers.size;
+    const timeExpired = this.roundEndsAtMs !== null ? nowMs >= this.roundEndsAtMs : false;
+    const allAnswered = totalPlayers > 0 ? answeredCount >= totalPlayers : false;
+
+    return {
+      endsAtMs: this.roundEndsAtMs,
+      totalPlayers,
+      answeredCount,
+      timeExpired,
+      allAnswered,
+      canProceed: timeExpired || allAnswered,
+    };
   }
 }

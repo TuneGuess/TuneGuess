@@ -3,6 +3,9 @@ import { useGameStore } from '@/stores/game';
 import LobbyView from '@/views/LobbyView.vue';
 import WaitingView from '@/views/WaitingView.vue';
 import GameView from '@/views/GameView.vue';
+import CreditsView from '@/views/CreditsView.vue';
+import LegalView from '@/views/LegalView.vue';
+import NotFoundView from '@/views/NotFoundView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -24,10 +27,25 @@ const router = createRouter({
       component: GameView,
     },
     {
+      path: '/credits',
+      name: 'credits',
+      component: CreditsView,
+    },
+    {
+      path: '/legal',
+      name: 'legal',
+      component: LegalView,
+    },
+    {
       path: '/:pathMatch(.*)*',
-      redirect: '/',
+      name: 'not-found',
+      component: NotFoundView,
     },
   ],
+  scrollBehavior(to) {
+    if (to.hash) return { el: to.hash, behavior: 'smooth' };
+    return { top: 0, behavior: 'smooth' };
+  },
 });
 
 router.beforeEach((to) => {

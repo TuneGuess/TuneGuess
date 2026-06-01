@@ -22,15 +22,32 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-if="game.roomCode" class="flex flex-col items-center gap-8 mt-4">
-    <div class="text-center">
+  <div v-if="game.roomCode" class="flex flex-col items-center gap-8 mt-2 pb-8">
+    <header
+      v-motion
+      :initial="{ opacity: 0, y: 30 }"
+      :enter="{ opacity: 1, y: 0, transition: { duration: 600 } }"
+      class="text-center"
+    >
       <span class="room-badge">{{ game.roomCode }}</span>
-      <h2 class="text-3xl font-black mt-4 italic">{{ game.roomName }}</h2>
-      <p class="opacity-50 text-sm mt-1">Salon d'attente</p>
-    </div>
+      <h2 class="text-3xl md:text-4xl font-black mt-5 italic text-gradient">
+        {{ game.roomName }}
+      </h2>
+      <p class="opacity-45 text-sm mt-2 flex items-center justify-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+        Salon d'attente
+      </p>
+    </header>
 
-    <div class="glass-card p-8 w-full max-w-2xl">
-      <h3 class="text-lg font-bold mb-3 opacity-80">Lien d'invitation</h3>
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 24 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 100, duration: 500 } }"
+      class="glass-card p-6 md:p-8 w-full max-w-2xl"
+    >
+      <h3 class="text-lg font-bold mb-3 opacity-80 flex items-center gap-2">
+        <span class="text-green-400">⎘</span> Lien d'invitation
+      </h3>
       <div class="flex gap-2 flex-wrap">
         <input
           readonly
@@ -39,16 +56,22 @@ onMounted(() => {
         />
         <button
           type="button"
-          class="px-6 py-3 rounded-xl bg-white/10 border border-white/20 hover:bg-white/20 transition cursor-pointer font-bold shrink-0"
+          class="px-6 py-3 rounded-xl btn-secondary cursor-pointer font-bold shrink-0"
+          :class="{ '!bg-green-500/20 !border-green-400/40 !text-green-400': game.copySuccess }"
           @click="game.copyInviteLink()"
         >
-          {{ game.copySuccess ? 'Copié !' : 'Copier' }}
+          {{ game.copySuccess ? '✓ Copié !' : 'Copier' }}
         </button>
       </div>
     </div>
 
-    <div class="glass-card p-8 w-full max-w-2xl">
-      <h3 class="text-lg font-bold mb-4">
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 24 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 180, duration: 500 } }"
+      class="glass-card p-6 md:p-8 w-full max-w-2xl"
+    >
+      <h3 class="text-lg font-bold mb-4 opacity-80">
         Paramètres {{ game.isHost ? '' : '(lecture seule)' }}
       </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -79,40 +102,54 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="glass-card p-8 w-full max-w-2xl text-center">
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 24 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 260, duration: 500 } }"
+      class="glass-card p-6 md:p-8 w-full max-w-2xl text-center"
+    >
+      <h3 class="text-sm uppercase tracking-widest opacity-40 font-bold mb-5">Joueurs</h3>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
         <template v-if="game.players.length > 0">
           <div
-            v-for="p in game.players"
+            v-for="(p, i) in game.players"
             :key="p.id"
-            class="p-4 bg-white/5 rounded-2xl border border-white/10 font-bold italic flex items-center justify-center gap-2"
+            v-motion
+            :initial="{ opacity: 0, scale: 0.8 }"
+            :visible="{ opacity: 1, scale: 1, transition: { delay: i * 60, type: 'spring' } }"
+            class="p-4 bg-white/5 rounded-2xl border border-white/10 font-bold italic flex items-center justify-center gap-2 hover:border-green-400/30 transition-colors"
           >
             <span>{{ p.name }}</span>
             <span v-if="p.isHost" class="host-crown" title="Hôte">👑</span>
           </div>
         </template>
-        <p v-else class="col-span-full opacity-50">Connexion...</p>
+        <p v-else class="col-span-full opacity-50 flex items-center justify-center gap-2">
+          <span class="inline-block w-4 h-4 border-2 border-white/30 border-t-green-400 rounded-full animate-spin" />
+          Connexion...
+        </p>
       </div>
 
-      <!-- Erreur de chargement ou autre -->
-      <div v-if="game.roomError" class="mb-6 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-left max-w-lg mx-auto flex flex-col gap-4 relative overflow-hidden backdrop-blur-md">
-        <!-- Background light effect -->
-        <div class="absolute -right-10 -top-10 w-24 h-24 bg-red-500/10 rounded-full blur-xl pointer-events-none"></div>
-        
+      <div
+        v-if="game.roomError"
+        v-motion
+        :initial="{ opacity: 0, x: -10 }"
+        :enter="{ opacity: 1, x: 0 }"
+        class="mb-6 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-left max-w-lg mx-auto flex flex-col gap-4 relative overflow-hidden backdrop-blur-md"
+      >
+        <div class="absolute -right-10 -top-10 w-24 h-24 bg-red-500/10 rounded-full blur-xl pointer-events-none" />
+
         <div class="flex items-start gap-4">
-          <!-- Icon -->
           <div class="p-2 rounded-xl bg-red-500/20 text-red-400 shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
           </div>
-          
+
           <div class="flex-1 min-w-0">
             <h4 class="text-red-400 font-bold text-base leading-tight">
               {{ typeof game.roomError === 'object' ? game.roomError.message : game.roomError }}
             </h4>
-            
-            <!-- Customized Advice based on error code -->
+
             <div v-if="typeof game.roomError === 'object'" class="mt-2 text-sm opacity-90 text-white/80 space-y-2">
               <p v-if="game.roomError.code === 'SPOTIFY_WHITELIST_ERROR'">
                 <strong>Compte non autorisé (mode développement) :</strong> L'application TuneGuess utilise l'API Spotify en mode de développement restreint. L'administrateur du projet doit ajouter l'adresse e-mail de votre compte Spotify dans la liste des utilisateurs autorisés du dashboard Spotify Developer. Vous pouvez également basculer sur le fournisseur Jellyfin.
@@ -132,12 +169,11 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Close button -->
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="text-white/40 hover:text-white/80 transition p-1 rounded-lg hover:bg-white/5 cursor-pointer shrink-0"
-            @click="game.clearRoomError()"
             title="Masquer l'erreur"
+            @click="game.clearRoomError()"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -145,61 +181,65 @@ onMounted(() => {
           </button>
         </div>
 
-        <!-- Technical details accordion -->
         <div v-if="typeof game.roomError === 'object' && game.roomError.details" class="border-t border-white/10 pt-3 mt-1">
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="text-xs text-white/50 hover:text-white/80 transition flex items-center gap-1 font-semibold cursor-pointer"
             @click="showTechnicalDetails = !showTechnicalDetails"
           >
             <span>{{ showTechnicalDetails ? 'Masquer' : 'Afficher' }} les détails techniques</span>
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" 
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
               class="w-3.5 h-3.5 transition-transform duration-200"
               :class="{ 'rotate-180': showTechnicalDetails }"
             >
               <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
             </svg>
           </button>
-          
-          <div v-show="showTechnicalDetails" class="mt-2 p-3 bg-black/40 rounded-xl font-mono text-[11px] leading-relaxed text-white/70 overflow-x-auto max-h-32 border border-white/5">
+
+          <div
+            v-show="showTechnicalDetails"
+            class="mt-2 p-3 bg-black/40 rounded-xl font-mono text-[11px] leading-relaxed text-white/70 overflow-x-auto max-h-32 border border-white/5"
+          >
             {{ game.roomError.details }}
           </div>
         </div>
       </div>
 
       <div v-if="!game.linkedProvider" class="flex flex-col items-center gap-4 mb-6">
-        <div class="flex bg-white/5 p-1 rounded-full border border-white/10 w-full max-w-xs">
+        <div class="flex bg-white/5 p-1 rounded-full border border-white/10 w-full max-w-xs relative">
           <button
             type="button"
-            class="flex-1 py-2 rounded-full font-bold text-sm cursor-pointer transition"
-            :class="activeProviderTab === 'spotify' ? 'bg-white text-black' : 'opacity-60 hover:opacity-100'"
+            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10"
+            :class="activeProviderTab === 'spotify' ? 'tab-pill-active' : 'opacity-60 hover:opacity-100'"
             @click="activeProviderTab = 'spotify'"
           >
             Spotify
           </button>
           <button
             type="button"
-            class="flex-1 py-2 rounded-full font-bold text-sm cursor-pointer transition"
-            :class="activeProviderTab === 'jellyfin' ? 'bg-white text-black' : 'opacity-60 hover:opacity-100'"
+            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10"
+            :class="activeProviderTab === 'jellyfin' ? 'tab-pill-active' : 'opacity-60 hover:opacity-100'"
             @click="activeProviderTab = 'jellyfin'"
           >
             Jellyfin
           </button>
         </div>
 
-        <!-- Spotify Login -->
         <template v-if="activeProviderTab === 'spotify'">
           <button
             type="button"
-            class="w-full sm:w-auto bg-[#1DB954] text-black px-8 py-3 rounded-full font-black hover:scale-105 transition cursor-pointer"
+            class="w-full sm:w-auto bg-[#1DB954] text-black px-8 py-3 rounded-full font-black hover:scale-105 transition cursor-pointer shadow-[0_0_30px_rgba(29,185,84,0.35)]"
             @click="game.spotifyLogin()"
           >
             Connecter Spotify
           </button>
         </template>
 
-        <!-- Jellyfin QuickConnect Login -->
         <template v-else-if="activeProviderTab === 'jellyfin'">
           <div v-if="!game.jellyfinCode && !game.jellyfinConnecting" class="flex gap-2 w-full max-w-md">
             <input
@@ -210,19 +250,33 @@ onMounted(() => {
             />
             <button
               type="button"
-              class="px-5 py-3 rounded-xl bg-white text-black hover:scale-105 transition cursor-pointer font-bold text-sm"
+              class="px-5 py-3 rounded-xl btn-primary cursor-pointer font-bold text-sm shrink-0"
               @click="game.initiateJellyfin(jellyfinUrlInput)"
             >
               Associer
             </button>
           </div>
 
-          <div v-else-if="game.jellyfinCode" class="flex flex-col items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-2xl w-full max-w-md">
+          <div
+            v-else-if="game.jellyfinCode"
+            v-motion
+            :initial="{ opacity: 0, scale: 0.9 }"
+            :enter="{ opacity: 1, scale: 1 }"
+            class="flex flex-col items-center gap-3 p-5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-md"
+          >
             <p class="text-sm opacity-80">Saisissez ce code dans votre application Jellyfin :</p>
-            <span class="text-3xl font-black tracking-widest text-green-400 uppercase py-2 px-6 bg-white/5 rounded-xl border border-white/10">
+            <span
+              v-motion
+              :initial="{ scale: 0.8 }"
+              :enter="{ scale: 1, transition: { type: 'spring', stiffness: 300 } }"
+              class="text-3xl font-black tracking-widest text-green-400 uppercase py-3 px-8 bg-white/5 rounded-xl border border-green-400/30 shadow-[0_0_40px_rgba(74,222,128,0.15)]"
+            >
               {{ game.jellyfinCode }}
             </span>
-            <p class="text-xs opacity-50 animate-pulse">En attente de validation...</p>
+            <p class="text-xs opacity-50 flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              En attente de validation...
+            </p>
             <button
               type="button"
               class="mt-2 text-xs opacity-50 hover:opacity-100 underline cursor-pointer"
@@ -232,29 +286,49 @@ onMounted(() => {
             </button>
           </div>
 
-          <div v-else class="text-sm opacity-50 py-3">
+          <div v-else class="text-sm opacity-50 py-3 flex items-center gap-2">
+            <span class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             Initialisation de la connexion...
           </div>
         </template>
       </div>
 
       <div v-else class="mb-6">
-        <p v-if="game.linkedProvider === 'spotify'" class="text-green-400 text-sm font-bold">
-          🟢 Spotify connecté (morceaux chargés)
-        </p>
-        <p v-else-if="game.linkedProvider === 'jellyfin'" class="text-green-400 text-sm font-bold">
-          🟢 Jellyfin connecté (morceaux chargés)
+        <p
+          v-motion
+          :initial="{ opacity: 0 }"
+          :enter="{ opacity: 1 }"
+          class="inline-flex items-center gap-2 text-green-400 text-sm font-bold px-4 py-2 rounded-full bg-green-500/10 border border-green-500/25"
+        >
+          <span class="w-2 h-2 rounded-full bg-green-400" />
+          <span>
+            <template v-if="game.linkedProvider === 'spotify' && game.spotifyProfileName">
+              Connecté sur Spotify en tant que {{ game.spotifyProfileName }}
+            </template>
+            <template v-else>
+              {{ game.linkedProvider === 'spotify' ? 'Spotify' : 'Jellyfin' }} connecté
+            </template>
+          </span>
         </p>
       </div>
 
       <div
         v-if="game.gameOver"
-        class="mb-6 p-4 rounded-2xl bg-white/5 border border-white/10"
+        v-motion
+        :initial="{ opacity: 0, y: 10 }"
+        :enter="{ opacity: 1, y: 0 }"
+        class="mb-6 p-5 rounded-2xl bg-white/5 border border-white/10"
       >
-        <p class="font-black mb-2">Partie terminée</p>
-        <ol class="text-sm space-y-1">
-          <li v-for="(p, i) in game.gameOver" :key="p.id">
-            {{ i + 1 }}. {{ p.name }} — {{ p.score }} pts
+        <p class="font-black mb-3 text-gradient">Partie terminée</p>
+        <ol class="text-sm space-y-2">
+          <li
+            v-for="(p, i) in game.gameOver"
+            :key="p.id"
+            class="flex justify-between items-center p-2 rounded-lg"
+            :class="i === 0 ? 'bg-yellow-500/10 border border-yellow-500/20' : ''"
+          >
+            <span>{{ i + 1 }}. {{ p.name }}</span>
+            <span class="font-black text-green-400">{{ p.score }} pts</span>
           </li>
         </ol>
       </div>
@@ -262,19 +336,19 @@ onMounted(() => {
       <button
         type="button"
         :disabled="!game.canLaunch"
-        class="btn-launch px-10 py-4 rounded-full font-black text-xl transition cursor-pointer disabled:opacity-60"
+        class="btn-launch px-12 py-4 rounded-full font-black text-xl cursor-pointer disabled:opacity-60"
         :title="!game.canLaunch ? 'Il faut au moins 2 joueurs' : ''"
         @click="game.startGame()"
       >
-        Lancer la party
+        ▶ Lancer la party
       </button>
-      <p v-if="!game.canLaunch && game.isHost" class="text-xs opacity-50 mt-3">
+      <p v-if="!game.canLaunch && game.isHost" class="text-xs opacity-45 mt-3">
         Minimum 2 joueurs pour lancer
       </p>
 
       <button
         type="button"
-        class="mt-6 text-sm opacity-40 hover:opacity-70 underline cursor-pointer"
+        class="mt-8 text-sm opacity-35 hover:opacity-70 transition cursor-pointer"
         @click="game.leaveRoom()"
       >
         Quitter le salon
