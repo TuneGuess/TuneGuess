@@ -16,6 +16,7 @@ import { sanitizeInput } from './utils';
 import { SpotifyProvider } from './SpotifyProvider';
 import { JellyfinProvider } from './JellyfinProvider';
 import { YouTubeProvider } from './YouTubeProvider';
+import { LastFmProvider } from './lastFmProvider';
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use(express.json());
 const spotifyProvider = new SpotifyProvider();
 const jellyfinProvider = new JellyfinProvider();
 const youtubeProvider = new YouTubeProvider();
+const lastFmProvider = new LastFmProvider();
 
 // --- SPOTIFY AUTHENTICATION ---
 app.get('/auth/spotify/login', (req: Request, res: Response) => {
@@ -160,6 +162,8 @@ app.get('/api/tracks/top', async (req: Request, res: Response) => {
       tracks = await jellyfinProvider.getUserTopTracks(token, { serverUrl, userId });
     } else if (provider === 'youtube') {
       tracks = await youtubeProvider.getUserTopTracks(token);
+    } else if (provider === 'lastfm') {
+      tracks = await lastFmProvider.getUserTopTracks(token);
     } else {
       tracks = await spotifyProvider.getUserTopTracks(token);
     }
@@ -187,6 +191,8 @@ app.get('/api/tracks/recent', async (req: Request, res: Response) => {
       tracks = await jellyfinProvider.getUserRecentTracks(token, { serverUrl, userId });
     } else if (provider === 'youtube') {
       tracks = await youtubeProvider.getUserRecentTracks(token);
+    } else if (provider === 'lastfm') {
+      tracks = await lastFmProvider.getUserRecentTracks(token);
     } else {
       tracks = await spotifyProvider.getUserRecentTracks(token);
     }

@@ -25,6 +25,8 @@ export const useGameStore = defineStore('game', () => {
   const spotifyLinked = ref(false);
   const youtubeLinked = ref(false);
   const jellyfinLinked = ref(false);
+  const lastfmLinked = ref(false);
+  const lastfmUsername = ref(localStorage.getItem('lastfm_username') || '');
   const jellyfinServerUrl = ref(localStorage.getItem('jellyfin_server_url') || '');
   const jellyfinCode = ref(null);
   const jellyfinSecret = ref(null);
@@ -170,6 +172,56 @@ export const useGameStore = defineStore('game', () => {
       };
       youtubeLinked.value = false;
     }
+  }
+
+  async function loadLastfmTracks(username) {
+    roomError.value = '';
+    try {
+      const encodedUser = encodeURIComponent(username);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${encodedUser}&provider=lastfm`);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${encodedUser}&provider=lastfm`);
+
+      const allTracks = [...recentTracks, ...topTracks];
+      const seenIds = new Set();
+      const uniqueTracks = [];
+      for (const track of allTracks) {
+        if (track?.id && !seenIds.has(track.id)) {
+          seenIds.add(track.id);
+          uniqueTracks.push(track);
+        }
+      }
+
+      if (uniqueTracks.length === 0) {
+        throw new Error("Aucun morceau trouvé pour cet utilisateur Last.fm.");
+      }
+
+      socket.emit('store_tracks', uniqueTracks);
+      lastfmLinked.value = true;
+      lastfmUsername.value = username;
+      localStorage.setItem('lastfm_username', username);
+    } catch (err) {
+      console.error("Erreur Last.fm tracks loading:", err);
+      roomError.value = {
+        message: err.message,
+        code: err.code || 'API_ERROR',
+        details: err.details || '',
+        provider: 'lastfm'
+      };
+      lastfmLinked.value = false;
+    }
+  }
+
+  function connectLastfm(username) {
+    roomError.value = '';
+    const safeUser = sanitizeInput((username || '').toString().trim());
+    if (!safeUser) {
+      alert('Veuillez saisir un nom d’utilisateur Last.fm.');
+      return;
+    }
+    if (roomCode.value) {
+      localStorage.setItem('active_room_code', roomCode.value);
+    }
+    loadLastfmTracks(safeUser);
   }
 
   function bindSocketListeners(router) {
@@ -515,6 +567,7 @@ export const useGameStore = defineStore('game', () => {
     if (spotifyLinked.value) return 'spotify';
     if (youtubeLinked.value) return 'youtube';
     if (jellyfinLinked.value) return 'jellyfin';
+    if (lastfmLinked.value) return 'lastfm';
     return null;
   });
 
@@ -564,6 +617,8 @@ export const useGameStore = defineStore('game', () => {
     submitGuess,
     nextRound,
     jellyfinLinked,
+    lastfmLinked,
+    lastfmUsername,
     jellyfinServerUrl,
     jellyfinCode,
     jellyfinConnecting,
@@ -572,6 +627,7 @@ export const useGameStore = defineStore('game', () => {
     youtubeLinked,
     youtubeLogin,
     linkedProvider,
+    connectLastfm,
     clearRoomError,
   };
 });
