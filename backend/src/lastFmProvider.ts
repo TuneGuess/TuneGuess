@@ -86,7 +86,7 @@ export class LastFmProvider implements MusicProvider {
         if (deezerTrack && deezerTrack.preview) {
           genericTracks.push({
             id: `lastfm-${deezerTrack.id || Math.random().toString(36).substr(2, 9)}`,
-            provider: 'apple-music', // Tu pourras rajouter 'lastfm' dans ton type de l'interface MusicProvider si besoin[span_1](start_span)[span_1](end_span)
+            provider: 'lastfm',
             name: trackName,
             artists: artistName || 'Artiste Inconnu',
             albumName: albumName || deezerTrack.album?.title || '',
