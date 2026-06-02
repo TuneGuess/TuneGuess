@@ -1,6 +1,6 @@
 <script setup>
 import { useRoute } from 'vue-router';
-import logo from '@/assets/Logo.png';
+import logo from '@/assets/Logo.svg';
 
 const route = useRoute();
 </script>
