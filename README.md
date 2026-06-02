@@ -42,11 +42,4 @@ Avant de lancer le projet, vous aurez besoin de :
 Créez un fichier `.env` à la racine du projet et complétez les variables suivantes :
 
 ```env
-# Spotify API Configuration
-SPOTIFY_CLIENT_ID=votre_client_id_ici
-SPOTIFY_CLIENT_SECRET=votre_client_secret_ici
-SPOTIFY_REDIRECT_URI=http://localhost:3000/api/callback
-
-# App Configuration
-PORT=3000
-NODE_ENV=production
+TODO : faire le .env
