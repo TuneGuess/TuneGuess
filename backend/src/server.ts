@@ -15,6 +15,7 @@ import { RoomManager } from './RoomManager';
 import { sanitizeInput } from './utils';
 import { SpotifyProvider } from './SpotifyProvider';
 import { JellyfinProvider } from './JellyfinProvider';
+import { YouTubeProvider } from './YouTubeProvider';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use(express.json());
 
 const spotifyProvider = new SpotifyProvider();
 const jellyfinProvider = new JellyfinProvider();
+const youtubeProvider = new YouTubeProvider();
 
 // --- SPOTIFY AUTHENTICATION ---
 app.get('/auth/spotify/login', (req: Request, res: Response) => {
@@ -44,6 +46,26 @@ app.get('/auth/spotify/callback', async (req: Request, res: Response) => {
     res.redirect(`${FRONTEND_URL}?provider=spotify&token=${access_token}`);
   } catch (error: any) {
     console.error("Erreur Callback Spotify:", error.message);
+    res.status(500).send("Erreur d'authentification");
+  }
+});
+
+// --- YOUTUBE AUTHENTICATION ---
+app.get('/auth/youtube/login', (req: Request, res: Response) => {
+  res.redirect(youtubeProvider.getAuthorizationUrl());
+});
+
+app.get('/auth/youtube/callback', async (req: Request, res: Response) => {
+  const code = (req.query.code as string) || null;
+  if (!code) {
+    res.status(400).send("Code manquant");
+    return;
+  }
+  try {
+    const access_token = await youtubeProvider.getAccessToken(code);
+    res.redirect(`${FRONTEND_URL}?provider=youtube&token=${access_token}`);
+  } catch (error: any) {
+    console.error("Erreur Callback YouTube:", error.message);
     res.status(500).send("Erreur d'authentification");
   }
 });
@@ -87,6 +109,8 @@ function handleProviderError(res: Response, error: any, defaultMessage: string, 
   if (error.response?.data) {
     if (provider === 'spotify') {
       details = error.response.data.error?.message || JSON.stringify(error.response.data);
+    } else if (provider === 'youtube') {
+      details = error.response.data.error?.message || JSON.stringify(error.response.data);
     } else if (provider === 'jellyfin') {
       details = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
     }
@@ -98,6 +122,10 @@ function handleProviderError(res: Response, error: any, defaultMessage: string, 
       code = 'SPOTIFY_WHITELIST_ERROR';
     } else if (status === 401) {
       code = 'SPOTIFY_UNAUTHORIZED';
+    }
+  } else if (provider === 'youtube') {
+    if (status === 401 || status === 403) {
+      code = 'YOUTUBE_UNAUTHORIZED';
     }
   } else if (provider === 'jellyfin') {
     if (status === 401 || status === 403) {
@@ -130,6 +158,8 @@ app.get('/api/tracks/top', async (req: Request, res: Response) => {
     let tracks;
     if (provider === 'jellyfin') {
       tracks = await jellyfinProvider.getUserTopTracks(token, { serverUrl, userId });
+    } else if (provider === 'youtube') {
+      tracks = await youtubeProvider.getUserTopTracks(token);
     } else {
       tracks = await spotifyProvider.getUserTopTracks(token);
     }
@@ -155,6 +185,8 @@ app.get('/api/tracks/recent', async (req: Request, res: Response) => {
     let tracks;
     if (provider === 'jellyfin') {
       tracks = await jellyfinProvider.getUserRecentTracks(token, { serverUrl, userId });
+    } else if (provider === 'youtube') {
+      tracks = await youtubeProvider.getUserRecentTracks(token);
     } else {
       tracks = await spotifyProvider.getUserRecentTracks(token);
     }

@@ -167,6 +167,9 @@ onMounted(() => {
               <p v-else-if="game.roomError.code === 'LASTFM_ERROR'">
                 <strong>Utilisateur introuvable :</strong> Impossible de charger les données pour ce pseudonyme Last.fm. Vérifiez l'orthographe.
               </p>
+              <p v-else-if="game.roomError.code === 'YOUTUBE_UNAUTHORIZED'">
+                <strong>Connexion Google expirée :</strong> Votre session de connexion Google/YouTube a expiré ou a été révoquée. Veuillez vous reconnecter.
+              </p>
               <p v-else>
                 Une erreur est survenue lors de la communication avec le fournisseur de musique.
               </p>
@@ -227,6 +230,14 @@ onMounted(() => {
           <button
             type="button"
             class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10 transition-all"
+            :class="activeProviderTab === 'youtube' ? 'tab-pill-active' : 'opacity-60 hover:opacity-100'"
+            @click="activeProviderTab = 'youtube'"
+          >
+            YouTube
+          </button>
+          <button
+            type="button"
+            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10 transition-all"
             :class="activeProviderTab === 'jellyfin' ? 'tab-pill-active' : 'opacity-60 hover:opacity-100'"
             @click="activeProviderTab = 'jellyfin'"
           >
@@ -241,7 +252,9 @@ onMounted(() => {
             Last.fm
           </button>
         </div>
+      </div>
 
+      <div v-if="!game.linkedProvider" class="flex flex-col items-center gap-4 mb-6">
         <template v-if="activeProviderTab === 'spotify'">
           <button
             type="button"
@@ -249,6 +262,16 @@ onMounted(() => {
             @click="game.spotifyLogin()"
           >
             Connecter Spotify
+          </button>
+        </template>
+
+        <template v-else-if="activeProviderTab === 'youtube'">
+          <button
+            type="button"
+            class="w-full sm:w-auto bg-[#FF0000] text-white px-8 py-3 rounded-full font-black hover:scale-105 transition cursor-pointer shadow-[0_0_30px_rgba(255,0,0,0.35)]"
+            @click="game.youtubeLogin()"
+          >
+            Connecter YouTube
           </button>
         </template>
 
@@ -340,7 +363,7 @@ onMounted(() => {
               Last.fm connecté ({{ game.lastfmUsername }})
             </template>
             <template v-else>
-              {{ game.linkedProvider === 'spotify' ? 'Spotify' : game.linkedProvider === 'jellyfin' ? 'Jellyfin' : 'Last.fm' }} connecté
+              {{ game.linkedProvider === 'spotify' ? 'Spotify' : game.linkedProvider === 'youtube' ? 'YouTube' : game.linkedProvider === 'jellyfin' ? 'Jellyfin' : 'Last.fm' }} connecté
             </template>
           </span>
         </p>

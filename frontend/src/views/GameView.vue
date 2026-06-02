@@ -213,6 +213,15 @@ function correctPlayerName() {
               />
             </div>
           </div>
+          <div
+            v-else
+            v-motion
+            :initial="{ opacity: 0, y: 16 }"
+            :enter="{ opacity: 1, y: 0, transition: { delay: 350 } }"
+            class="mt-8 p-4 rounded-2xl bg-white/5 border border-white/10 text-white/60 text-sm font-semibold max-w-md mx-auto flex items-center justify-center gap-2"
+          >
+            <span>⚠️</span> Aucun extrait audio disponible pour ce morceau.
+          </div>
         </div>
 
         <Transition name="page" mode="out-in">
