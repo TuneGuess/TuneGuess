@@ -12,6 +12,7 @@ const game = useGameStore();
 
 const activeProviderTab = ref('spotify');
 const jellyfinUrlInput = ref(game.jellyfinServerUrl || '');
+const lastfmUsernameInput = ref(game.lastfmUsername || '');
 const showTechnicalDetails = ref(false);
 
 onMounted(() => {
@@ -152,16 +153,19 @@ onMounted(() => {
 
             <div v-if="typeof game.roomError === 'object'" class="mt-2 text-sm opacity-90 text-white/80 space-y-2">
               <p v-if="game.roomError.code === 'SPOTIFY_WHITELIST_ERROR'">
-                <strong>Compte non autorisé (mode développement) :</strong> L'application TuneGuess utilise l'API Spotify en mode de développement restreint. L'administrateur du projet doit ajouter l'adresse e-mail de votre compte Spotify dans la liste des utilisateurs autorisés du dashboard Spotify Developer. Vous pouvez également basculer sur le fournisseur Jellyfin.
+                <strong>Compte non autorisé (mode développement) :</strong> L'application TuneGuess utilise l'API Spotify en mode de développement restreint. L'administrateur doit ajouter votre e-mail de compte Spotify dans son dashboard développeur. Vous pouvez également basculer sur Jellyfin ou Last.fm.
               </p>
               <p v-else-if="game.roomError.code === 'SPOTIFY_UNAUTHORIZED'">
-                <strong>Session expirée :</strong> Votre session de connexion Spotify n'est plus valide. Essayez de vous reconnecter pour rafraîchir la connexion.
+                <strong>Session expirée :</strong> Votre session de connexion Spotify n'est plus valide. Essayez de vous reconnecter.
               </p>
               <p v-else-if="game.roomError.code === 'JELLYFIN_UNAUTHORIZED'">
-                <strong>Connexion rejetée :</strong> L'authentification a échoué sur Jellyfin. Vérifiez les informations d'identification ou tentez de relancer la connexion QuickConnect.
+                <strong>Connexion rejetée :</strong> L'authentification a échoué sur Jellyfin. Vérifiez vos identifiants ou relancez la connexion.
               </p>
               <p v-else-if="game.roomError.code === 'JELLYFIN_CONNECTION_ERROR'">
-                <strong>Serveur injoignable :</strong> Impossible de joindre le serveur Jellyfin depuis le serveur TuneGuess. Vérifiez l'URL de votre serveur et assurez-vous qu'il est bien en ligne et accessible en externe.
+                <strong>Serveur injoignable :</strong> Impossible de joindre le serveur Jellyfin. Vérifiez l'URL et assurez-vous qu'il est accessible en externe.
+              </p>
+              <p v-else-if="game.roomError.code === 'LASTFM_ERROR'">
+                <strong>Utilisateur introuvable :</strong> Impossible de charger les données pour ce pseudonyme Last.fm. Vérifiez l'orthographe.
               </p>
               <p v-else>
                 Une erreur est survenue lors de la communication avec le fournisseur de musique.
@@ -210,11 +214,11 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="!game.linkedProvider" class="flex flex-col items-center gap-4 mb-6">
-        <div class="flex bg-white/5 p-1 rounded-full border border-white/10 w-full max-w-xs relative">
+      <div v-if="!game.linkedProvider" class="flex flex-col items-center gap-4 mb-6 w-full">
+        <div class="flex bg-white/5 p-1 rounded-full border border-white/10 w-full max-w-md relative">
           <button
             type="button"
-            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10"
+            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10 transition-all"
             :class="activeProviderTab === 'spotify' ? 'tab-pill-active' : 'opacity-60 hover:opacity-100'"
             @click="activeProviderTab = 'spotify'"
           >
@@ -222,11 +226,19 @@ onMounted(() => {
           </button>
           <button
             type="button"
-            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10"
+            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10 transition-all"
             :class="activeProviderTab === 'jellyfin' ? 'tab-pill-active' : 'opacity-60 hover:opacity-100'"
             @click="activeProviderTab = 'jellyfin'"
           >
             Jellyfin
+          </button>
+          <button
+            type="button"
+            class="flex-1 py-2.5 rounded-full font-bold text-sm cursor-pointer tab-pill z-10 transition-all"
+            :class="activeProviderTab === 'lastfm' ? 'tab-pill-active' : 'opacity-60 hover:opacity-100'"
+            @click="activeProviderTab = 'lastfm'"
+          >
+            Last.fm
           </button>
         </div>
 
@@ -291,6 +303,25 @@ onMounted(() => {
             Initialisation de la connexion...
           </div>
         </template>
+
+        <template v-else-if="activeProviderTab === 'lastfm'">
+          <div class="flex gap-2 w-full max-w-md" v-motion :initial="{ opacity: 0, y: 10 }" :enter="{ opacity: 1, y: 0 }">
+            <input
+              v-model="lastfmUsernameInput"
+              type="text"
+              placeholder="Nom d'utilisateur Last.fm"
+              class="input-premium flex-1 p-3 rounded-xl text-sm outline-none font-semibold"
+              @keyup.enter="game.connectLastfm(lastfmUsernameInput)"
+            />
+            <button
+              type="button"
+              class="px-5 py-3 rounded-xl btn-primary cursor-pointer font-bold text-sm shrink-0 bg-red-600 hover:bg-red-700 border-red-500/30 text-white shadow-[0_0_20px_rgba(220,38,38,0.2)] transition"
+              @click="game.connectLastfm(lastfmUsernameInput)"
+            >
+              Associer
+            </button>
+          </div>
+        </template>
       </div>
 
       <div v-else class="mb-6">
@@ -305,8 +336,11 @@ onMounted(() => {
             <template v-if="game.linkedProvider === 'spotify' && game.spotifyProfileName">
               Connecté sur Spotify en tant que {{ game.spotifyProfileName }}
             </template>
+            <template v-else-if="game.linkedProvider === 'lastfm'">
+              Last.fm connecté ({{ game.lastfmUsername }})
+            </template>
             <template v-else>
-              {{ game.linkedProvider === 'spotify' ? 'Spotify' : 'Jellyfin' }} connecté
+              {{ game.linkedProvider === 'spotify' ? 'Spotify' : game.linkedProvider === 'jellyfin' ? 'Jellyfin' : 'Last.fm' }} connecté
             </template>
           </span>
         </p>
