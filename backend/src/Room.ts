@@ -10,6 +10,8 @@ export interface RoomSettings {
 export class Room {
   public players: Player[] = [];
   public playerTracks: Record<string, GenericTrack[]> = {};
+  // Compte le nombre de fois où un joueur a été sélectionné pour équilibrer la distribution
+  public selectionCounts: Record<string, number> = {};
   public currentQuestion: { track: GenericTrack; playerId: string } | null = null;
   public answeredPlayers = new Set<string>();
   public roundEndsAtMs: number | null = null;
@@ -53,6 +55,7 @@ export class Room {
   public removePlayer(playerId: string): void {
     this.players = this.players.filter((p) => p.id !== playerId);
     delete this.playerTracks[playerId];
+    delete this.selectionCounts[playerId];
 
     if (this.creatorId === playerId) {
       this.assignHostIfNeeded();
@@ -73,6 +76,8 @@ export class Room {
 
   public storeTracks(playerId: string, tracks: GenericTrack[]): void {
     this.playerTracks[playerId] = tracks;
+    // initialiser le compteur de sélection si nécessaire
+    if (!this.selectionCounts[playerId]) this.selectionCounts[playerId] = 0;
   }
 
   public async selectNextQuestion() {
@@ -92,13 +97,29 @@ export class Room {
       return null;
     }
 
-    // Choisir un joueur au hasard parmi ceux qui ont encore des morceaux non joués
-    const randomPlayerId = playerIdsWithTracks[Math.floor(Math.random() * playerIdsWithTracks.length)];
-    const tracksForPlayer = playerToTracks[randomPlayerId];
-    
+    // Choisir un joueur en équilibrant la distribution : prendre celui qui a été le moins sélectionné
+    let minCount = Infinity;
+    const candidates: string[] = [];
+    for (const pid of playerIdsWithTracks) {
+      const c = this.selectionCounts[pid] || 0;
+      if (c < minCount) {
+        minCount = c;
+        candidates.length = 0;
+        candidates.push(pid);
+      } else if (c === minCount) {
+        candidates.push(pid);
+      }
+    }
+
+    const chosenPlayerId = candidates[Math.floor(Math.random() * candidates.length)];
+    const tracksForPlayer = playerToTracks[chosenPlayerId];
+
     // Choisir un morceau au hasard pour ce joueur
     const track = tracksForPlayer[Math.floor(Math.random() * tracksForPlayer.length)];
-    const selected = { track, playerId: randomPlayerId };
+    const selected = { track, playerId: chosenPlayerId };
+
+    // Mettre à jour le compteur de sélection pour équilibrer les prochaines manches
+    this.selectionCounts[chosenPlayerId] = (this.selectionCounts[chosenPlayerId] || 0) + 1;
 
     const trackId = track.id;
     if (trackId) this.playedTrackIds.add(trackId);
