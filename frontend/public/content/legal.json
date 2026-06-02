@@ -1,0 +1,55 @@
+{
+  "title": "Mentions légales",
+  "subtitle": "Informations légales et politique du site",
+  "lastUpdated": "2026-06-01",
+  "sections": [
+    {
+      "id": "editeur",
+      "title": "Éditeur du site",
+      "paragraphs": [
+        "Le site TuneGuess est édité par Raphaël Thieulen.",
+        "Directeur de la publication : mailto:hello@raphthln.ovh."
+      ]
+    },
+    {
+      "id": "hebergement",
+      "title": "Hébergement",
+      "paragraphs": [
+        "Le site est hébergé par Contabo GmbH, Welfenstrasse 22,81541 Munich, Germany."
+      ]
+    },
+    {
+      "id": "donnees",
+      "title": "Données personnelles",
+      "paragraphs": [
+        "TuneGuess collecte uniquement les données nécessaires au fonctionnement du jeu (pseudo, scores en session). Aucune donnée n'est vendue à des tiers.",
+        "Les connexions Spotify ou Jellyfin sont gérées via OAuth / QuickConnect ; les jetons restent côté serveur de jeu et ne sont pas exposés aux autres joueurs.",
+        "Pour exercer vos droits (accès, rectification, suppression), contactez : hello@raphthln.ovh."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "Cookies & stockage local",
+      "paragraphs": [
+        "Le site peut utiliser le stockage local du navigateur pour mémoriser votre pseudo et le volume audio.",
+        "Aucun cookie publicitaire n'est déposé par défaut."
+      ]
+    },
+    {
+      "id": "propriete",
+      "title": "Propriété intellectuelle",
+      "paragraphs": [
+        "Les extraits musicaux, pochettes et métadonnées appartiennent à leurs ayants droit (Spotify, Jellyfin, labels, artistes). TuneGuess ne revendique aucun droit sur ces contenus.",
+        "Le code et l'identité visuelle de TuneGuess restent la propriété de leurs auteurs, sauf mention contraire."
+      ]
+    },
+    {
+      "id": "responsabilite",
+      "title": "Limitation de responsabilité",
+      "paragraphs": [
+        "TuneGuess est fourni « en l'état », sans garantie de disponibilité continue. L'éditeur ne saurait être tenu responsable des interruptions liées aux API tierces (Spotify, Jellyfin)."
+      ]
+    }
+  ],
+  "footer": "Et non ! On ne vend pas vos informations personnelles au KGB (c'est triste...)."
+}

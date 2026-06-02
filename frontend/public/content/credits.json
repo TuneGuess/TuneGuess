@@ -1,0 +1,38 @@
+{
+  "title": "Crédits",
+  "subtitle": "Les personnes et technologies derrière TuneGuess",
+  "sections": [
+    {
+      "title": "Projet",
+      "items": [
+        {
+          "name": "TuneGuess",
+          "role": "TuneGuess est un jeu musical inspiré de PhotoRoulette reprenant l'idée a l'aide de vos dernières écoutes musicales.",
+          "link": null
+        }
+      ]
+    },
+    {
+      "title": "Équipe",
+      "items": [
+        {
+          "name": "Raphaël Thieulen",
+          "role": "Créateur du Projet, Frontend & Backend, Design & UI/UX",
+          "link": "https://github.com/RaphTHLN"
+        },
+        {
+          "name": "ChristianF67",
+          "role": "Frontend & Backend",
+          "link": "https://github.com/Christianf67"
+        }
+      ]
+    },
+    {
+      "title": "Code Source",
+      "items": [
+        { "name": "GitHub", "role": "Le Code Source est disponible sur GitHub! On accepte vos contributions :) ", "link": "https://example.org" }
+      ]
+    }
+  ],
+  "footer": "Merci de nous donner du crédit. C'est mieux que de voir CursorAi commit a notre place ;-;"
+}
