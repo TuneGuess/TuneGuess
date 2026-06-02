@@ -34,9 +34,8 @@ watch(
 </script>
 
 <template>
-  <div class="min-h-screen text-white flex flex-col items-center font-[Unageo] relative">
+  <div class="min-h-screen flex flex-col items-center font-[Unageo] relative">
     <div class="app-bg" aria-hidden="true" />
-    <AnimatedBackground />
     <AppHeader />
     <main class="w-full max-w-5xl px-4 sm:px-6 relative z-10 flex-1 flex flex-col">
       <RouterView v-slot="{ Component }">

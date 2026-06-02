@@ -17,7 +17,7 @@ const route = useRoute();
       <img
         :src="logo"
         alt="Logo TuneGuess"
-        class="h-10 md:h-12 w-auto transition-transform duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_20px_rgba(74,222,128,0.4)]"
+        class="h-10 md:h-12 w-auto transition-transform duration-300 group-hover:scale-105"
       />
     </RouterLink>
 
@@ -30,14 +30,14 @@ const route = useRoute();
       <RouterLink
         to="/credits"
         class="px-3 py-1.5 text-xs sm:text-sm rounded-full transition"
-        :class="route.name === 'credits' ? 'bg-white/10 text-green-400' : 'opacity-50 hover:opacity-100 hover:bg-white/5'"
+        :class="route.name === 'credits' ? 'bg-blue-900/30 text-blue-400' : 'opacity-60 hover:opacity-100 hover:bg-gray-800'"
       >
         Crédits
       </RouterLink>
       <RouterLink
         to="/legal"
         class="px-3 py-1.5 text-xs sm:text-sm rounded-full transition"
-        :class="route.name === 'legal' ? 'bg-white/10 text-green-400' : 'opacity-50 hover:opacity-100 hover:bg-white/5'"
+        :class="route.name === 'legal' ? 'bg-blue-900/30 text-blue-400' : 'opacity-60 hover:opacity-100 hover:bg-gray-800'"
       >
         Légal
       </RouterLink>
