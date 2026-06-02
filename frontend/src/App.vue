@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useGameStore } from '@/stores/game';
 import AppHeader from '@/components/AppHeader.vue';
@@ -13,6 +13,24 @@ const game = useGameStore();
 onMounted(() => {
   game.initFromRoute(router);
 });
+
+// Gérer de manière réactive les invitations depuis l'URL
+watch(
+  () => route.query.room,
+  (newRoom) => {
+    if (newRoom) {
+      const code = newRoom.toUpperCase();
+      game.pendingInviteCode = code;
+      game.joinCodeInput = code;
+
+      // Normaliser en majuscule dans l'URL si besoin
+      if (newRoom !== code) {
+        router.replace({ name: 'lobby', query: { room: code } });
+      }
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
