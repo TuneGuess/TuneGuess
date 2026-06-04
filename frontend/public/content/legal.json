@@ -8,7 +8,7 @@
       "title": "Éditeur du site",
       "paragraphs": [
         "Le site TuneGuess est édité par Raphaël Thieulen.",
-        "Directeur de la publication : mailto:hello@raphthln.ovh."
+        "Directeur de la publication : contact@tuneguess.app"
       ]
     },
     {
@@ -24,7 +24,7 @@
       "paragraphs": [
         "TuneGuess collecte uniquement les données nécessaires au fonctionnement du jeu (pseudo, scores en session). Aucune donnée n'est vendue à des tiers.",
         "Les connexions Spotify ou Jellyfin sont gérées via OAuth / QuickConnect ; les jetons restent côté serveur de jeu et ne sont pas exposés aux autres joueurs.",
-        "Pour exercer vos droits (accès, rectification, suppression), contactez : hello@raphthln.ovh."
+        "Pour exercer vos droits (accès, rectification, suppression), contactez : contact@tuneguess.app."
       ]
     },
     {
