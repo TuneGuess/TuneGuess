@@ -161,6 +161,48 @@ function onCreate(name) {
       </div>
     </section>
 
+    <!-- Section d'explication de l'objectif de l'application (requis pour la validation Google OAuth) -->
+    <section 
+        v-motion
+        :initial="{ opacity: 0, y: 30 }"
+        :enter="{ opacity: 1, y: 0, transition: { delay: 400, duration: 600 } }"
+        class="mt-16 p-8 rounded-3xl border border-[#333] bg-[var(--color-dark)]/50 backdrop-blur-md"
+    >
+      <h2 class="text-2xl font-black mb-4 text-[var(--color-beige)] text-center">
+        Qu'est-ce que TuneGuess ?
+      </h2>
+      <p class="text-[#8A8585] text-center max-w-2xl mx-auto mb-8 leading-relaxed">
+        TuneGuess est un jeu de blind test musical en temps réel et auto-hébergé. 
+        Le but est simple : créez un salon, invitez vos amis et devinez les chansons qui défilent le plus rapidement possible pour accumuler des points.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+        <div class="p-5 rounded-2xl border border-[#222] bg-[var(--color-dark)] flex flex-col gap-2">
+          <span class="text-2xl">🎵</span>
+          <h3 class="font-bold text-[var(--color-beige)]">Vos Propres Musiques</h3>
+          <p class="text-[#8A8585] leading-relaxed">
+            Jouez avec vos morceaux favoris en connectant vos comptes Spotify, YouTube Music, Jellyfin ou Last.fm.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl border border-[#222] bg-[var(--color-dark)] flex flex-col gap-2">
+          <span class="text-2xl">⚡</span>
+          <h3 class="font-bold text-[var(--color-beige)]">Multijoueur Instantané</h3>
+          <p class="text-[#8A8585] leading-relaxed">
+            Rejoignez ou créez des salons instantanément grâce à un code de salon ou un lien d'invitation direct.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl border border-[#222] bg-[var(--color-dark)] flex flex-col gap-2">
+          <span class="text-2xl">🔒</span>
+          <h3 class="font-bold text-[var(--color-beige)]">Respect de la Vie Privée</h3>
+          <p class="text-[#8A8585] leading-relaxed">
+            L'application est open-source. Vos tokens de connexion et historiques de lecture sont traités localement et ne sont jamais stockés de manière permanente.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <CreateRoomModal
         :open="showCreateModal"
         @close="showCreateModal = false"

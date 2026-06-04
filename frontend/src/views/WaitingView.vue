@@ -260,7 +260,8 @@ onMounted(() => {
         <template v-if="activeProviderTab === 'spotify'">
           <button
               type="button"
-              class="w-full sm:w-auto bg-[#1DB954] text-black px-8 py-3 rounded-full font-black hover:brightness-110 transition cursor-pointer text-sm"
+              disabled
+              class="w-full sm:w-auto bg-[#1DB954] text-black px-8 py-3 rounded-full font-black hover:brightness-110 transition cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               @click="game.spotifyLogin()"
           >
             Connecter Spotify
