@@ -1,10 +1,6 @@
 import { ref, shallowRef } from 'vue';
 
 const cache = new Map();
-
-/**
- * Charge un fichier JSON depuis /content/{slug}.json (public/).
- */
 export function useSiteContent(slug) {
   const data = shallowRef(null);
   const loading = ref(true);

@@ -30,7 +30,7 @@
     {
       "title": "Code Source",
       "items": [
-        { "name": "GitHub", "role": "Le Code Source est disponible sur GitHub! On accepte vos contributions :) ", "link": "https://example.org" }
+        { "name": "GitHub", "role": "Le Code Source est disponible sur GitHub! On accepte vos contributions :) ", "link": "https://github.com/TuneGuess/TuneGuess" }
       ]
     }
   ],

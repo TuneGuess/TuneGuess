@@ -10,7 +10,6 @@ export interface RoomSettings {
 export class Room {
   public players: Player[] = [];
   public playerTracks: Record<string, GenericTrack[]> = {};
-  // Compte le nombre de fois où un joueur a été sélectionné pour équilibrer la distribution
   public selectionCounts: Record<string, number> = {};
   public currentQuestion: { track: GenericTrack; playerId: string } | null = null;
   public answeredPlayers = new Set<string>();
@@ -76,12 +75,10 @@ export class Room {
 
   public storeTracks(playerId: string, tracks: GenericTrack[]): void {
     this.playerTracks[playerId] = tracks;
-    // initialiser le compteur de sélection si nécessaire
     if (!this.selectionCounts[playerId]) this.selectionCounts[playerId] = 0;
   }
 
   public async selectNextQuestion() {
-    // Regrouper les morceaux non joués par joueur (sans exclure ceux sans previewUrl)
     const playerToTracks: Record<string, GenericTrack[]> = {};
     for (const [playerId, tracks] of Object.entries(this.playerTracks)) {
       const unplayed = (tracks || []).filter((track) => {
@@ -97,7 +94,6 @@ export class Room {
       return null;
     }
 
-    // Choisir un joueur en équilibrant la distribution : prendre celui qui a été le moins sélectionné
     let minCount = Infinity;
     const candidates: string[] = [];
     for (const pid of playerIdsWithTracks) {
@@ -113,27 +109,16 @@ export class Room {
 
     const chosenPlayerId = candidates[Math.floor(Math.random() * candidates.length)];
     const tracksForPlayer = playerToTracks[chosenPlayerId];
-
-    // Choisir un morceau au hasard pour ce joueur
     const track = tracksForPlayer[Math.floor(Math.random() * tracksForPlayer.length)];
     const selected = { track, playerId: chosenPlayerId };
-
-    // Mettre à jour le compteur de sélection pour équilibrer les prochaines manches
     this.selectionCounts[chosenPlayerId] = (this.selectionCounts[chosenPlayerId] || 0) + 1;
-
     const trackId = track.id;
     if (trackId) this.playedTrackIds.add(trackId);
-
     const name = track.name;
     const artists = track.artists;
-    
-    // Essayer de trouver un extrait officiel Deezer d'abord (pour la légalité et la pertinence du chorus)
     let previewUrl = await fetchDeezerPreview(name, artists);
-
     let finalPreviewUrl = previewUrl;
     let finalImageUrl = track.imageUrl || '';
-
-    // Si pas d'extrait Deezer, on se replie sur l'extrait d'origine (Jellyfin proxy ou Spotify)
     if (!finalPreviewUrl) {
       if (track.provider === 'jellyfin' && track.previewUrl) {
         finalPreviewUrl = `/api/proxy/jellyfin/stream?roomId=${this.id}&playerId=${selected.playerId}&trackId=${track.id}`;
@@ -142,7 +127,6 @@ export class Room {
       }
     }
 
-    // L'image de Jellyfin passe toujours par le proxy pour masquer l'URL du serveur privé
     if (track.provider === 'jellyfin' && track.imageUrl) {
       finalImageUrl = `/api/proxy/jellyfin/image?roomId=${this.id}&playerId=${selected.playerId}&trackId=${track.id}`;
     }

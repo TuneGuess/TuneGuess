@@ -144,7 +144,6 @@ function handleProviderError(res: Response, error: any, defaultMessage: string, 
   });
 }
 
-// --- UNIFIED TRACKS API ---
 app.get('/api/tracks/top', async (req: Request, res: Response) => {
   const token = req.query.token as string;
   const provider = (req.query.provider as string) || 'spotify';
@@ -343,8 +342,6 @@ function startRoundTimer(room: Room) {
   }
 
   room.roundTimeout = setTimeout(() => {
-    // La manche est considérée terminée côté serveur (timeExpired=true),
-    // le leader pourra passer à la suivante.
     emitRoundState(room);
   }, durationMs);
 }
@@ -514,7 +511,6 @@ io.on('connection', (socket: Socket) => {
       emitRoomPlayers(room);
       emitRoundState(room);
 
-      // Si tout le monde a répondu, on peut arrêter le timer.
       const state = room.getRoundState(Date.now());
       if (state.allAnswered && room.roundTimeout) {
         clearTimeout(room.roundTimeout);
