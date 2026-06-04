@@ -344,47 +344,33 @@ export const useGameStore = defineStore('game', () => {
     if (!token || oauthHandled) return;
     oauthHandled = true;
 
+    // 1. Écriture du token dans le localStorage pour la fenêtre parente (fallback universel)
     localStorage.setItem('oauth_token_received', `${provider}|${token}`);
 
+    // 2. Notification via postMessage si l'opener existe
     if (window.opener) {
       try {
         window.opener.postMessage({ type: `${provider}_token`, token: token }, window.location.origin);
-        window.close();
-        return;
       } catch (err) {
         console.error("Échec postMessage:", err);
       }
     }
 
-    if (window.name === 'SpotifyLogin' || window.name === 'YouTubeLogin' || window.name === 'Spotify Login' || window.name === 'YouTube Login') {
-      setTimeout(() => {
-        window.close();
-      }, 500);
-      return;
+    // 3. Fermeture de la fenêtre (puisque c'est forcément un flux OAuth de popup)
+    // On remplace le contenu de la page par un message propre si elle ne se ferme pas tout de suite
+    if (document && document.body) {
+      document.body.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #121214; color: #E4E4E7; font-family: sans-serif; text-align: center; padding: 20px;">
+          <h1 style="color: #1DB954; font-size: 24px; margin-bottom: 10px;">Connexion réussie !</h1>
+          <p style="color: #8A8585; font-size: 16px;">Cette fenêtre va se fermer automatiquement.</p>
+          <p style="color: #555; font-size: 14px; margin-top: 20px;">Si elle ne se ferme pas, vous pouvez la fermer manuellement.</p>
+        </div>
+      `;
     }
 
-    const savedName = sanitizeInput(localStorage.getItem('player_name') || 'Anonyme');
-    const codeToJoin = localStorage.getItem('active_room_code') || pendingInviteCode.value;
-
-    const finishOAuth = async () => {
-      if (provider === 'youtube') {
-        await loadYouTubeTracks(token);
-      } else {
-        await loadSpotifyTracks(token);
-      }
-      const keepRoom = codeToJoin ? `/room/${codeToJoin}` : '/';
-      window.history.replaceState({}, '', keepRoom);
-      if (codeToJoin) {
-        router.replace({ name: 'waiting', params: { code: codeToJoin } });
-      }
-    };
-
-    if (codeToJoin && !roomId.value) {
-      socket.once('room_joined', finishOAuth);
-      socket.emit('join_room', { roomCode: codeToJoin, playerName: savedName });
-    } else {
-      finishOAuth();
-    }
+    setTimeout(() => {
+      window.close();
+    }, 1000);
   }
 
   function createRoom(roomLabel) {
