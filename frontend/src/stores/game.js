@@ -237,6 +237,18 @@ export const useGameStore = defineStore('game', () => {
       }
     });
 
+    window.addEventListener('storage', async (event) => {
+      if (event.key === 'oauth_token_received' && event.newValue) {
+        const [provider, token] = event.newValue.split('|');
+        if (provider === 'spotify') {
+          await loadSpotifyTracks(token);
+        } else if (provider === 'youtube') {
+          await loadYouTubeTracks(token);
+        }
+        localStorage.removeItem('oauth_token_received');
+      }
+    });
+
     socket.on('active_rooms', (rooms) => {
       activeRooms.value = rooms;
     });
@@ -332,9 +344,22 @@ export const useGameStore = defineStore('game', () => {
     if (!token || oauthHandled) return;
     oauthHandled = true;
 
+    localStorage.setItem('oauth_token_received', `${provider}|${token}`);
+
     if (window.opener) {
-      window.opener.postMessage({ type: `${provider}_token`, token: token }, window.location.origin);
-      window.close();
+      try {
+        window.opener.postMessage({ type: `${provider}_token`, token: token }, window.location.origin);
+        window.close();
+        return;
+      } catch (err) {
+        console.error("Échec postMessage:", err);
+      }
+    }
+
+    if (window.name === 'SpotifyLogin' || window.name === 'YouTubeLogin' || window.name === 'Spotify Login' || window.name === 'YouTube Login') {
+      setTimeout(() => {
+        window.close();
+      }, 500);
       return;
     }
 
@@ -400,7 +425,7 @@ export const useGameStore = defineStore('game', () => {
     const top = (window.screen.height - height) / 2;
     window.open(
       `${API_BASE}/auth/spotify/login`,
-      'Spotify Login',
+      'SpotifyLogin',
       `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
     );
   }
@@ -417,7 +442,7 @@ export const useGameStore = defineStore('game', () => {
     const top = (window.screen.height - height) / 2;
     window.open(
       `${API_BASE}/auth/youtube/login`,
-      'YouTube Login',
+      'YouTubeLogin',
       `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
     );
   }
