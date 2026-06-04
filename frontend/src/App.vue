@@ -14,7 +14,6 @@ onMounted(() => {
   game.initFromRoute(router);
 });
 
-// Gérer de manière réactive les invitations depuis l'URL
 watch(
   () => route.query.room,
   (newRoom) => {
@@ -23,7 +22,6 @@ watch(
       game.pendingInviteCode = code;
       game.joinCodeInput = code;
 
-      // Normaliser en majuscule dans l'URL si besoin
       if (newRoom !== code) {
         router.replace({ name: 'lobby', query: { room: code } });
       }
