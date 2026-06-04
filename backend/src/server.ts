@@ -352,7 +352,8 @@ app.get('/admin/rooms', (req: Request, res: Response) => {
 });
 
 app.get('/admin/rooms/:roomId', (req: Request, res: Response) => {
-  const room = roomManager.getRoomById(req.params.roomId);
+  const roomId = req.params.roomId as string;
+  const room = roomManager.getRoomById(roomId);
   if (!room) {
     res.status(404).json({ error: 'Room introuvable' });
     return;
@@ -361,7 +362,9 @@ app.get('/admin/rooms/:roomId', (req: Request, res: Response) => {
 });
 
 app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response) => {
-  const room = roomManager.getRoomById(req.params.roomId);
+  const roomId = req.params.roomId as string;
+  const playerId = req.params.playerId as string;
+  const room = roomManager.getRoomById(roomId);
   const { name } = req.body as { name?: string };
   if (!room) {
     res.status(404).json({ error: 'Room introuvable' });
@@ -371,7 +374,7 @@ app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response
     res.status(400).json({ error: 'Nom invalide' });
     return;
   }
-  const player = room.players.find((p) => p.id === req.params.playerId);
+  const player = room.players.find((p) => p.id === playerId);
   if (!player) {
     res.status(404).json({ error: 'Joueur introuvable' });
     return;
@@ -382,12 +385,13 @@ app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response
 });
 
 app.post('/admin/rooms/:roomId/players/:playerId/kick', (req: Request, res: Response) => {
-  const room = roomManager.getRoomById(req.params.roomId);
+  const roomId = req.params.roomId as string;
+  const playerId = req.params.playerId as string;
+  const room = roomManager.getRoomById(roomId);
   if (!room) {
     res.status(404).json({ error: 'Room introuvable' });
     return;
   }
-  const playerId = req.params.playerId;
   const player = room.players.find((p) => p.id === playerId);
   if (!player) {
     res.status(404).json({ error: 'Joueur introuvable' });
@@ -419,7 +423,8 @@ app.post('/admin/rooms/:roomId/players/:playerId/kick', (req: Request, res: Resp
 });
 
 app.delete('/admin/rooms/:roomId', (req: Request, res: Response) => {
-  const room = roomManager.getRoomById(req.params.roomId);
+  const roomId = req.params.roomId as string;
+  const room = roomManager.getRoomById(roomId);
   if (!room) {
     res.status(404).json({ error: 'Room introuvable' });
     return;
