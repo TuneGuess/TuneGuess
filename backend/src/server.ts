@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import http from 'http';
 import axios from 'axios';
@@ -313,7 +313,132 @@ const io = new Server(server, {
   cors: { origin: CORS_ORIGIN }
 });
 
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin-local-secret';
 const roomManager = new RoomManager();
+
+function adminAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token || token !== ADMIN_PASSWORD) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  next();
+}
+
+function getRoomSummary(room: Room) {
+  return {
+    id: room.id,
+    code: room.code,
+    name: room.name,
+    status: room.status,
+    creatorId: room.creatorId,
+    currentRound: room.currentRound,
+    players: room.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      score: player.score,
+      isHost: player.isHost,
+    })),
+    settings: room.settings,
+  };
+}
+
+app.use('/admin', adminAuth);
+
+app.get('/admin/rooms', (req: Request, res: Response) => {
+  const rooms = roomManager.getAllRooms().map(getRoomSummary);
+  res.json(rooms);
+});
+
+app.get('/admin/rooms/:roomId', (req: Request, res: Response) => {
+  const room = roomManager.getRoomById(req.params.roomId);
+  if (!room) {
+    res.status(404).json({ error: 'Room introuvable' });
+    return;
+  }
+  res.json(getRoomSummary(room));
+});
+
+app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response) => {
+  const room = roomManager.getRoomById(req.params.roomId);
+  const { name } = req.body as { name?: string };
+  if (!room) {
+    res.status(404).json({ error: 'Room introuvable' });
+    return;
+  }
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    res.status(400).json({ error: 'Nom invalide' });
+    return;
+  }
+  const player = room.players.find((p) => p.id === req.params.playerId);
+  if (!player) {
+    res.status(404).json({ error: 'Joueur introuvable' });
+    return;
+  }
+  player.name = name.trim();
+  emitRoomPlayers(room);
+  res.json(getRoomSummary(room));
+});
+
+app.post('/admin/rooms/:roomId/players/:playerId/kick', (req: Request, res: Response) => {
+  const room = roomManager.getRoomById(req.params.roomId);
+  if (!room) {
+    res.status(404).json({ error: 'Room introuvable' });
+    return;
+  }
+  const playerId = req.params.playerId;
+  const player = room.players.find((p) => p.id === playerId);
+  if (!player) {
+    res.status(404).json({ error: 'Joueur introuvable' });
+    return;
+  }
+
+  room.removePlayer(playerId);
+  const socketToKick = io.sockets.sockets.get(playerId);
+  if (socketToKick) {
+    socketToKick.leave(room.id);
+    socketToKick.data.roomId = null;
+    socketToKick.emit('kicked');
+  }
+
+  if (room.players.length === 0) {
+    roomManager.deleteRoom(room.id);
+  } else {
+    emitRoomPlayers(room);
+    if (room.status === 'waiting') {
+      io.to(room.id).emit('room_settings', room.settings);
+    }
+    if (room.status === 'playing') {
+      emitRoundState(room);
+    }
+  }
+
+  broadcastActiveRooms();
+  res.json({ success: true });
+});
+
+app.delete('/admin/rooms/:roomId', (req: Request, res: Response) => {
+  const room = roomManager.getRoomById(req.params.roomId);
+  if (!room) {
+    res.status(404).json({ error: 'Room introuvable' });
+    return;
+  }
+
+  room.resetForRound();
+  room.players.forEach((player) => {
+    const socket = io.sockets.sockets.get(player.id);
+    if (socket) {
+      socket.leave(room.id);
+      socket.data.roomId = null;
+      socket.emit('room_closed');
+    }
+  });
+
+  roomManager.deleteRoom(room.id);
+  broadcastActiveRooms();
+  res.json({ success: true });
+});
 
 function broadcastActiveRooms() {
   io.emit('active_rooms', roomManager.getPublicRoomList());

@@ -5,6 +5,7 @@ import WaitingView from '@/views/WaitingView.vue';
 import GameView from '@/views/GameView.vue';
 import CreditsView from '@/views/CreditsView.vue';
 import LegalView from '@/views/LegalView.vue';
+import AdminView from '@/views/admin/AdminView.vue';
 import NotFoundView from '@/views/NotFoundView.vue';
 
 const router = createRouter({
@@ -35,6 +36,11 @@ const router = createRouter({
       path: '/legal',
       name: 'legal',
       component: LegalView,
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: AdminView,
     },
     {
       path: '/:pathMatch(.*)*',

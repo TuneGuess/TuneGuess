@@ -19,6 +19,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
+    ports:
+      - "8080:80"
     depends_on:
       - backend
     networks:
@@ -32,12 +34,13 @@ services:
     env_file:
       - .env
     environment:
-      FRONTEND_URL: https://frontend.example.com
-      CORS_ORIGIN: https://frontend.example.com
-      REDIRECT_URI: https://frontend.example.com
+      FRONTEND_URL: http://localhost:8080
+      CORS_ORIGIN: http://localhost:8080
+      REDIRECT_URI: http://localhost:8080
       PORT: "5000"
-    expose:
-      - "5000"
+      ADMIN_PASSWORD: "admin-local-secret"
+    ports:
+      - "5000:5000"
     networks:
       - tuneguess
 

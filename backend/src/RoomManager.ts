@@ -33,6 +33,18 @@ export class RoomManager {
     return this.rooms[roomId] || null;
   }
 
+  public getAllRooms(): Room[] {
+    return Object.values(this.rooms);
+  }
+
+  public deleteRoom(roomId: string): boolean {
+    if (!this.rooms[roomId]) {
+      return false;
+    }
+    delete this.rooms[roomId];
+    return true;
+  }
+
   public deleteRoomIfEmpty(roomId: string): boolean {
     const room = this.rooms[roomId];
     if (room && room.players.length === 0) {
