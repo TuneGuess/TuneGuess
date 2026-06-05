@@ -5,7 +5,7 @@ import { MusicProvider, GenericTrack } from './MusicProvider';
 export class SpotifyProvider implements MusicProvider {
   private clientId = process.env.SPOTIFY_CLIENT_ID;
   private clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-  private redirectUri = process.env.REDIRECT_URI;
+  private redirectUri = process.env.SPOTIFY_REDIRECT_URI || process.env.REDIRECT_URI;
 
   public getAuthorizationUrl(): string {
     const scope = 'user-read-recently-played user-top-read';
