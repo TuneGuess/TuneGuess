@@ -12,6 +12,8 @@
       <RouterLink to="/credits" class="footer-link">Crédits</RouterLink>
       <span class="hidden sm:inline opacity-20">·</span>
       <RouterLink to="/legal" class="footer-link">Mentions légales</RouterLink>
+      <span class="hidden sm:inline opacity-20">·</span>
+      <RouterLink to="/legal#confidentialite" class="footer-link">Règles de confidentialité</RouterLink>
     </div>
     <p class="text-center text-xs opacity-30 mt-4">
       TuneGuess — devinez qui écoute quoi

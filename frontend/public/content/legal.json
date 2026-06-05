@@ -19,11 +19,11 @@
       ]
     },
     {
-      "id": "donnees",
-      "title": "Données personnelles",
+      "id": "confidentialite",
+      "title": "Données personnelles & Règles de confidentialité",
       "paragraphs": [
         "TuneGuess collecte uniquement les données nécessaires au fonctionnement du jeu (pseudo, scores en session). Aucune donnée n'est vendue à des tiers.",
-        "Les connexions Spotify ou Jellyfin sont gérées via OAuth / QuickConnect ; les jetons restent côté serveur de jeu et ne sont pas exposés aux autres joueurs.",
+        "Les connexions Spotify, YouTube Music ou Jellyfin sont gérées via OAuth / QuickConnect ; les jetons restent côté serveur de jeu et ne sont pas exposés aux autres joueurs.",
         "Pour exercer vos droits (accès, rectification, suppression), contactez : contact@tuneguess.app."
       ]
     },
