@@ -316,7 +316,41 @@ const io = new Server(server, {
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin-local-secret';
 const roomManager = new RoomManager();
 
+function isLocalOrTailscale(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return true;
+  }
+  if (hostname.endsWith('.ts.net')) {
+    return true;
+  }
+  // Tailscale IP range (100.64.0.0/10)
+  const isTailscaleIP = /^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+  if (isTailscaleIP) {
+    return true;
+  }
+  // Local network IP ranges (192.168.x.x, 10.x.x.x, 172.16.x.x - 172.31.x.x)
+  const isLocalIP = /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+                    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+                    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+  if (isLocalIP) {
+    return true;
+  }
+  // Hostname without dots
+  if (!hostname.includes('.')) {
+    return true;
+  }
+  return false;
+}
+
 function adminAuth(req: Request, res: Response, next: NextFunction) {
+  const host = req.headers.host || '';
+  const hostname = host.split(':')[0];
+
+  if (!isLocalOrTailscale(hostname)) {
+    res.status(403).json({ error: 'Forbidden: Admin access is only allowed from local or Tailscale connections' });
+    return;
+  }
+
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (!token || token !== ADMIN_PASSWORD) {
