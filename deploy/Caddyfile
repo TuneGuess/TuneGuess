@@ -1,4 +1,4 @@
-tuneguess.raphthln.ovh {
+http://tuneguess.app, http://tuneguess.raphthln.ovh {
 	encode gzip
 
 	@admin path /admin /admin/*
