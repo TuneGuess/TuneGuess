@@ -527,6 +527,31 @@ function startRoundTimer(room: Room) {
   }, durationMs);
 }
 
+// Délai avant fermeture automatique d'une room inactive
+const INACTIVITY_WAITING_MS = 30 * 60 * 1000;  // 30 min en salle d'attente
+const INACTIVITY_PLAYING_MS = 2 * 60 * 60 * 1000; // 2h en cours de partie
+
+function startInactivityTimer(room: Room) {
+  room.clearInactivityTimer();
+
+  const delayMs = room.status === 'playing' ? INACTIVITY_PLAYING_MS : INACTIVITY_WAITING_MS;
+
+  room.inactivityTimeout = setTimeout(() => {
+    console.log(`Room ${room.code} fermée pour inactivité (statut: ${room.status})`);
+    room.clearInactivityTimer();
+    room.players.forEach((player) => {
+      const socket = io.sockets.sockets.get(player.id);
+      if (socket) {
+        socket.leave(room.id);
+        socket.data.roomId = null;
+        socket.emit('room_closed');
+      }
+    });
+    roomManager.deleteRoom(room.id);
+    broadcastActiveRooms();
+  }, delayMs);
+}
+
 io.on('connection', (socket: Socket) => {
   console.log('Connexion socket:', socket.id);
 
@@ -546,6 +571,7 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.createRoom(safeRoomName, socket.id, safePlayerName);
     socket.data.roomId = room.id;
     socket.join(room.id);
+    startInactivityTimer(room);
 
     socket.emit('room_joined', {
       roomId: room.id,
@@ -591,6 +617,7 @@ io.on('connection', (socket: Socket) => {
       });
       io.to(room.id).emit('room_settings', room.settings);
       emitRoomPlayers(room);
+      startInactivityTimer(room);
       broadcastActiveRooms();
     } catch (err: any) {
       socket.emit('room_error', { message: err.message });
@@ -630,11 +657,13 @@ io.on('connection', (socket: Socket) => {
     room.resetForRound();
     room.currentRound = 0;
     room.playedTrackIds = new Set<string>();
+    room.clearInactivityTimer();
     broadcastActiveRooms();
 
     const result = await room.selectNextQuestion();
     if (!result) {
       room.status = 'waiting';
+      startInactivityTimer(room);
       broadcastActiveRooms();
       io.to(room.id).emit('no_tracks');
       return;
@@ -664,6 +693,7 @@ io.on('connection', (socket: Socket) => {
       room.status = 'waiting';
       room.currentQuestion = null;
       room.resetForRound();
+      startInactivityTimer(room);
       broadcastActiveRooms();
       return;
     }

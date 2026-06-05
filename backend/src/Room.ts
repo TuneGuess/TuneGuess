@@ -19,6 +19,7 @@ export class Room {
   public currentRound = 0;
   public playedTrackIds = new Set<string>();
   public roundTimeout: NodeJS.Timeout | null = null;
+  public inactivityTimeout: NodeJS.Timeout | null = null;
 
   constructor(
     public readonly id: string,
@@ -168,6 +169,13 @@ export class Room {
       correct: isCorrect,
       correctPlayerId: this.currentQuestion.playerId,
     };
+  }
+
+  public clearInactivityTimer(): void {
+    if (this.inactivityTimeout) {
+      clearTimeout(this.inactivityTimeout);
+      this.inactivityTimeout = null;
+    }
   }
 
   public resetForRound(): void {
