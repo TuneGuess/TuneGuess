@@ -24,7 +24,50 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_URL;
 const PORT = Number(process.env.PORT) || 5000;
 
-app.use(cors({ origin: CORS_ORIGIN }));
+function isLocalOrTailscale(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return true;
+  }
+  if (hostname.endsWith('.ts.net')) {
+    return true;
+  }
+  // Tailscale IP range (100.64.0.0/10)
+  const isTailscaleIP = /^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+  if (isTailscaleIP) {
+    return true;
+  }
+  // Local network IP ranges (192.168.x.x, 10.x.x.x, 172.16.x.x - 172.31.x.x)
+  const isLocalIP = /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+                    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+                    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+  if (isLocalIP) {
+    return true;
+  }
+  // Hostname without dots
+  if (!hostname.includes('.')) {
+    return true;
+  }
+  return false;
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    try {
+      const hostname = new URL(origin).hostname;
+      if (isLocalOrTailscale(hostname) || origin === CORS_ORIGIN) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    } catch (err) {
+      callback(new Error('Invalid Origin'));
+    }
+  }
+}));
 app.use(express.json());
 
 const spotifyProvider = new SpotifyProvider();
@@ -315,32 +358,6 @@ const io = new Server(server, {
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin-local-secret';
 const roomManager = new RoomManager();
-
-function isLocalOrTailscale(hostname: string): boolean {
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return true;
-  }
-  if (hostname.endsWith('.ts.net')) {
-    return true;
-  }
-  // Tailscale IP range (100.64.0.0/10)
-  const isTailscaleIP = /^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(hostname);
-  if (isTailscaleIP) {
-    return true;
-  }
-  // Local network IP ranges (192.168.x.x, 10.x.x.x, 172.16.x.x - 172.31.x.x)
-  const isLocalIP = /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
-                    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
-                    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname);
-  if (isLocalIP) {
-    return true;
-  }
-  // Hostname without dots
-  if (!hostname.includes('.')) {
-    return true;
-  }
-  return false;
-}
 
 function adminAuth(req: Request, res: Response, next: NextFunction) {
   const host = req.headers.host || '';

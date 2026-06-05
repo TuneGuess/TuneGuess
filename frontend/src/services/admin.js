@@ -1,4 +1,14 @@
-const BASE_URL = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE) {
+    return import.meta.env.VITE_API_BASE;
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return 'http://localhost:5000';
+};
+
+const BASE_URL = getApiBaseUrl();
 const STORAGE_KEY = 'tuneguess_admin_password';
 
 function getStoredPassword() {
