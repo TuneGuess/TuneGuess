@@ -27,6 +27,43 @@ const PORT = Number(process.env.PORT) || 5000;
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
+// --- SEO ENDPOINTS ---
+app.get('/sitemap.xml', (req: Request, res: Response) => {
+  res.header('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Page d'accueil -->
+  <url>
+    <loc>${FRONTEND_URL}/</loc>
+    <lastmod>2026-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <!-- Mentions légales / Confidentialité -->
+  <url>
+    <loc>${FRONTEND_URL}/legal</loc>
+    <lastmod>2026-06-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <!-- Crédits -->
+  <url>
+    <loc>${FRONTEND_URL}/credits</loc>
+    <lastmod>2026-06-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>`);
+});
+
+app.get('/robots.txt', (req: Request, res: Response) => {
+  res.header('Content-Type', 'text/plain');
+  res.send(`User-agent: *
+Allow: /
+
+Sitemap: ${FRONTEND_URL}/sitemap.xml`);
+});
+
 const spotifyProvider = new SpotifyProvider();
 const jellyfinProvider = new JellyfinProvider();
 const youtubeProvider = new YouTubeProvider();
