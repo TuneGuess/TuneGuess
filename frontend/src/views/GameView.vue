@@ -17,6 +17,17 @@ const volume = ref(
 );
 const prevVolume = ref(0.5);
 
+// N'accepte que les URLs http(s) ou relatives au site (évite file:///, vides, etc.)
+const safeUrl = (u) => {
+  if (!u || typeof u !== 'string') return null;
+  try {
+    const parsed = new URL(u, window.location.origin);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : null;
+  } catch {
+    return null;
+  }
+};
+
 onMounted(() => {
   if (!game.currentTrack) {
     router.replace({ name: 'lobby' });
@@ -129,7 +140,8 @@ function correctPlayerName() {
           <div class="mb-6">
             <div class="relative w-full aspect-square rounded-xl overflow-hidden mb-6 border-2 border-[#333] bg-black/20">
               <img
-                  :src="game.currentTrack.image"
+                  v-if="safeUrl(game.currentTrack.image)"
+                  :src="safeUrl(game.currentTrack.image)"
                   alt=""
                   class="w-full h-full object-cover"
               />
@@ -146,7 +158,7 @@ function correctPlayerName() {
             </p>
 
             <div
-                v-if="game.currentTrack.preview_url"
+                v-if="safeUrl(game.currentTrack.preview_url)"
                 v-motion
                 :initial="{ opacity: 0, y: 16 }"
                 :enter="{ opacity: 1, y: 0, transition: { delay: 350 } }"
@@ -154,7 +166,7 @@ function correctPlayerName() {
             >
               <audio
                   ref="audioRef"
-                  :src="game.currentTrack.preview_url"
+                  :src="safeUrl(game.currentTrack.preview_url)"
                   @timeupdate="currentTime = $event.target.currentTime"
                   @loadedmetadata="duration = $event.target.duration"
                   @ended="isPlaying = false"

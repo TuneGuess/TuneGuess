@@ -6,6 +6,23 @@ import ContentPageLayout from '@/components/ContentPageLayout.vue';
 const { data, loading, error, load } = useSiteContent('legal');
 
 onMounted(() => load());
+
+// Détecte URLs et e-mails (sans ponctuation finale) pour les rendre cliquables sans v-html.
+const URL_PART = String.raw`https?:\/\/[^\s)]*[^\s).,;:!?]`;
+const EMAIL_PART = String.raw`[\w.+-]+@[\w-]+(?:\.[\w-]+)+`;
+const LINK_RE = new RegExp(`(${URL_PART}|${EMAIL_PART})`, 'g');
+const EMAIL_RE = new RegExp(`^${EMAIL_PART}$`);
+
+function linkify(text) {
+  return text
+    .split(LINK_RE)
+    .filter(Boolean)
+    .map((part) => {
+      if (/^https?:\/\//.test(part)) return { type: 'link', text: part, href: part, external: true };
+      if (EMAIL_RE.test(part)) return { type: 'link', text: part, href: `mailto:${part}`, external: false };
+      return { type: 'text', text: part };
+    });
+}
 </script>
 
 <template>
@@ -67,7 +84,16 @@ onMounted(() => load());
             class="stagger-item"
             :style="{ animationDelay: `${pi * 40}ms` }"
           >
-            {{ para }}
+            <template v-for="(chunk, ci) in linkify(para)" :key="ci">
+              <a
+                v-if="chunk.type === 'link'"
+                :href="chunk.href"
+                :target="chunk.external ? '_blank' : undefined"
+                :rel="chunk.external ? 'noopener noreferrer' : undefined"
+                class="text-green-400 underline underline-offset-2 break-all hover:opacity-80 transition"
+              >{{ chunk.text }}</a>
+              <template v-else>{{ chunk.text }}</template>
+            </template>
           </p>
         </div>
       </article>

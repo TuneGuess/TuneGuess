@@ -1,7 +1,7 @@
 {
   "title": "Mentions légales",
   "subtitle": "Informations légales et politique du site",
-  "lastUpdated": "2026-06-01",
+  "lastUpdated": "2026-11-07",
   "sections": [
     {
       "id": "editeur",
@@ -25,6 +25,18 @@
         "TuneGuess collecte uniquement les données nécessaires au fonctionnement du jeu (pseudo, scores en session). Aucune donnée n'est vendue à des tiers.",
         "Les connexions Spotify, YouTube Music ou Jellyfin sont gérées via OAuth / QuickConnect ; les jetons restent côté serveur de jeu et ne sont pas exposés aux autres joueurs.",
         "Pour exercer vos droits (accès, rectification, suppression), contactez : contact@tuneguess.app."
+      ]
+    },
+    {
+      "id": "donnees-google",
+      "title": "Données Google (YouTube)",
+      "paragraphs": [
+        "Données consultées : lorsque vous connectez votre compte Google, TuneGuess demande uniquement un accès en lecture seule à YouTube (youtube.readonly). Seules la liste de vos playlists, votre playlist « Vidéos J'aime » et les informations des vidéos qu'elles contiennent (titre, nom de la chaîne, identifiant, miniature) sont consultées. TuneGuess n'accède ni à votre adresse e-mail, ni à vos contacts, ni à votre historique, et ne peut rien publier, modifier ou supprimer sur votre compte.",
+        "Utilisation : ces données servent exclusivement à constituer la liste de morceaux de votre partie de blind test (extraction du titre et de l'artiste). Elles ne sont jamais utilisées à des fins publicitaires, de profilage ou d'entraînement de modèles d'IA.",
+        "Partage : les données Google ne sont ni vendues, ni louées, ni transmises à des tiers. Seuls les titres et artistes des morceaux tirés au sort sont visibles par les autres joueurs de votre salle, pendant la partie.",
+        "Stockage & protection : TuneGuess n'utilise aucune base de données. Le jeton d'accès Google transite uniquement entre votre navigateur et le serveur de jeu, via une connexion chiffrée (HTTPS), le temps d'interroger l'API YouTube. La liste des morceaux est conservée uniquement en mémoire pendant la partie.",
+        "Conservation & suppression : aucune donnée Google n'est conservée après la fin de votre partie ou de votre session. Le jeton d'accès expire automatiquement au bout d'environ une heure. Vous pouvez révoquer l'accès à tout moment depuis https://myaccount.google.com/permissions, ou demander la suppression de vos données à contact@tuneguess.app (traitement sous 30 jours).",
+        "L'utilisation et le transfert des informations reçues des API Google respectent les Règles relatives aux données utilisateur des services d'API Google (https://developers.google.com/terms/api-services-user-data-policy), y compris les exigences d'Utilisation limitée."
       ]
     },
     {
