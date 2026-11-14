@@ -63,6 +63,7 @@ ADMIN_PASSWORD=un_long_mot_de_passe_aleatoire
 - `CORS_ORIGIN` (par défaut `FRONTEND_URL`) est la seule origine acceptée par l'API et socket.io ; `localhost`/`127.0.0.1` ne sont ajoutés que hors production (`NODE_ENV` différent de `production`).
 - `JELLYFIN_ALLOW_PRIVATE_NETWORK=true` autorise un Jellyfin auto-hébergé sur le réseau local ; à n'activer que si le serveur n'est pas exposé à des inconnus (le backend pourrait sinon être utilisé pour sonder votre réseau). Les adresses de métadonnées cloud (169.254.x.x) restent toujours bloquées.
 - En production, mettez les URL publiques dans `.env` : `FRONTEND_URL`, `CORS_ORIGIN`, `REDIRECT_URI`, `GOOGLE_REDIRECT_URI`. `example.docker-compose.yml` lit ce fichier et ne contient aucun secret.
+- Si le front est construit avec `VITE_API_BASE` (API sur une autre origine que le site), ajoutez cette origine (`https://…` et `wss://…`) à `connect-src` dans la CSP de `frontend/nginx.conf`, sinon le navigateur bloque les appels à l'API.
 - Au retour de Spotify/YouTube, le jeton est transmis au navigateur dans le fragment de l'URL (`#token=…`), puis envoyé à l'API dans l'en-tête `Authorization` : il n'apparaît jamais dans les journaux d'accès.
 
 ---

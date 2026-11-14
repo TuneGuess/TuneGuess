@@ -8,7 +8,8 @@ export class YouTubeProvider implements MusicProvider {
   private redirectUri = process.env.GOOGLE_REDIRECT_URI || 
     (process.env.REDIRECT_URI 
       ? process.env.REDIRECT_URI.replace('/auth/spotify/callback', '/auth/youtube/callback')
-      : 'http://127.0.0.1:5000/auth/youtube/callback');
+      // Même origine que le front (Vite relaie /auth) : le cookie d'état posé au départ revient au retour.
+      : `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/youtube/callback`);
 
 
   public getAuthorizationUrl(state: string): string {

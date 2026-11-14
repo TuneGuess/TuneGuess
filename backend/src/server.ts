@@ -320,7 +320,10 @@ app.get('/api/proxy/jellyfin/:kind', async (req: Request, res: Response) => {
     let bytes = 0;
     upstream.data.on('data', (chunk: Buffer) => {
       bytes += chunk.length;
-      if (bytes > MAX_PROXY_BYTES) upstream.data.destroy();
+      if (bytes > MAX_PROXY_BYTES) {
+        upstream.data.destroy();
+        res.destroy(); // réponse coupée nettement, jamais laissée pendante
+      }
     });
     res.on('close', () => upstream.data.destroy());
     upstream.data.pipe(res);
