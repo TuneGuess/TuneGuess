@@ -14,6 +14,8 @@ export default defineConfig({
     proxy: {
       '/auth': 'http://127.0.0.1:5000',
       '/api': 'http://127.0.0.1:5000',
+      // L'API admin seulement : /admin (sans slash) reste la page de l'app.
+      '^/admin/': 'http://127.0.0.1:5000',
       '/socket.io': {
         target: 'http://127.0.0.1:5000',
         ws: true,

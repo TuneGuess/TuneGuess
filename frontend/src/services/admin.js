@@ -1,14 +1,7 @@
-const getApiBaseUrl = () => {
-  if (import.meta.env.VITE_API_BASE) {
-    return import.meta.env.VITE_API_BASE;
-  }
-  if (typeof window !== 'undefined' && window.location) {
-    return `${window.location.protocol}//${window.location.hostname}:5000`;
-  }
-  return 'http://localhost:5000';
-};
+import { API_BASE } from '@/config';
 
-const BASE_URL = getApiBaseUrl();
+// Même origine que le reste de l'app : nginx (ou Vite en dev) relaie /admin/ vers le backend.
+const BASE_URL = API_BASE;
 const STORAGE_KEY = 'tuneguess_admin_password';
 
 function getStoredPassword() {

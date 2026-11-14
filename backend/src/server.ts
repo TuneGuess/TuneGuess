@@ -11,7 +11,8 @@ import { Server, Socket } from 'socket.io';
 import { Player } from './Player';
 import { parseTrackPayload, Room } from './Room';
 import { RoomManager } from './RoomManager';
-import { sanitizeInput } from './utils';
+import { safeEqual, sanitizeInput } from './utils';
+import { isPrivateAddress } from './outbound';
 import { SpotifyProvider } from './SpotifyProvider';
 import { JellyfinProvider } from './JellyfinProvider';
 import { YouTubeProvider } from './YouTubeProvider';
@@ -318,21 +319,25 @@ const io = new Server(server, {
   cors: { origin: CORS_ORIGIN }
 });
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin-local-secret';
 const roomManager = new RoomManager();
 
-function adminAuth(req: Request, res: Response, next: NextFunction) {
-  const host = req.headers.host || '';
-  const hostname = host.split(':')[0];
+// Sans ADMIN_PASSWORD, l'admin est désactivé (le jeu, lui, continue de tourner).
+export function adminAuth(req: Request, res: Response, next: NextFunction) {
+  const password = process.env.ADMIN_PASSWORD;
+  if (!password) {
+    res.status(503).json({ error: 'Admin désactivé : ADMIN_PASSWORD non défini' });
+    return;
+  }
 
-  if (!isLocalOrTailscale(hostname)) {
+  // Adresse TCP réelle (l'en-tête Host est choisi par le client) : loopback, réseau privé ou Tailscale.
+  if (!isPrivateAddress(req.socket.remoteAddress || '')) {
     res.status(403).json({ error: 'Forbidden: Admin access is only allowed from local or Tailscale connections' });
     return;
   }
 
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!token || token !== ADMIN_PASSWORD) {
+  if (!token || !safeEqual(token, password)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }

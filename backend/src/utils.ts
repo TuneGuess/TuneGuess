@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { createHash, timingSafeEqual } from 'crypto';
 
 export const MAX_NAME_LENGTH = 20;
 export const MAX_ROOM_PLAYERS = 10;
@@ -17,6 +18,12 @@ export function escapeHtml(text: unknown): string {
 export function sanitizeInput(text: unknown, maxLen = MAX_NAME_LENGTH): string {
   if (typeof text !== 'string') return '';
   return escapeHtml(text.trim().slice(0, maxLen));
+}
+
+/** Comparaison en temps constant (les empreintes ont toujours la même longueur). */
+export function safeEqual(a: string, b: string): boolean {
+  const digest = (v: string) => createHash('sha256').update(v).digest();
+  return timingSafeEqual(digest(a), digest(b));
 }
 
 export function generateRoomCode(): string {
