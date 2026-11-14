@@ -83,6 +83,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const game = useGameStore();
 
+  // Confort seulement (masque la page hors réseau local) : la protection réelle est côté serveur et nginx.
   if (to.name === 'admin') {
     if (!isLocalOrTailscale(window.location.hostname)) {
       return { name: 'not-found' };
