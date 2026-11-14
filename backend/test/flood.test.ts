@@ -36,3 +36,17 @@ test('plafond global de salons', () => {
   for (let i = 0; i < MAX_ROOMS; i++) manager.createRoom('S', `h${i}`, 'J');
   assert.throws(() => manager.createRoom('S', 'trop', 'J'), /Trop de salons/);
 });
+
+test('proxy média hors de la limite /api : 700 extraits passent, /api reste plafonné', async () => {
+  const base = url.replace('ws://', 'http://').replace(/\/socket\.io.*/, '');
+  const statuses = async (path: string, n: number) => {
+    const out: number[] = [];
+    for (let i = 0; i < n; i += 50) {
+      out.push(...(await Promise.all(Array.from({ length: Math.min(50, n - i) }, () => fetch(base + path).then((r) => r.status)))));
+    }
+    return out;
+  };
+  assert.ok(!(await statuses('/api/proxy/jellyfin/stream?roomId=x&key=y', 700)).includes(429), 'extraits jamais coupés par la limite /api');
+  const api = await statuses('/api/inconnu', 601);
+  assert.equal(api.filter((s) => s === 429).length, 1, '601e requête /api refusée');
+});

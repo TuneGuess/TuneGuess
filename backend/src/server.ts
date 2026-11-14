@@ -74,7 +74,11 @@ if (process.env.NODE_ENV !== 'production') corsOrigins.push(/^https?:\/\/(localh
 
 app.use(cors({ origin: corsOrigins }));
 app.use(express.json());
-app.use(['/api', '/auth'], httpRateLimit(120, 60_000));
+// Limites par IP : une partie de 10 joueurs sur un même wifi partage une seule IP.
+// Le proxy média (extraits et pochettes, requêtes Range) a sa propre limite, bien plus haute.
+const apiLimit = httpRateLimit(600, 60_000);
+app.use('/api/proxy', httpRateLimit(3000, 60_000));
+app.use(['/api', '/auth'], (req, res, next) => (req.originalUrl.startsWith('/api/proxy/') ? next() : apiLimit(req, res, next)));
 
 // --- SEO ENDPOINTS ---
 app.get('/sitemap.xml', (req: Request, res: Response) => {
