@@ -8,8 +8,13 @@ import axios from 'axios';
 const ALWAYS_BLOCKED = new net.BlockList();
 ALWAYS_BLOCKED.addSubnet('0.0.0.0', 8);
 ALWAYS_BLOCKED.addSubnet('169.254.0.0', 16);
-ALWAYS_BLOCKED.addSubnet('224.0.0.0', 3);
-ALWAYS_BLOCKED.addAddress('::', 'ipv6');
+ALWAYS_BLOCKED.addSubnet('224.0.0.0', 3); // multicast + réservé 240.0.0.0/4 (scan:ok)
+ALWAYS_BLOCKED.addSubnet('192.0.0.0', 24); // affectations IETF
+ALWAYS_BLOCKED.addSubnet('198.18.0.0', 15); // bancs de test
+// Préfixes IPv6 qui encapsulent une IPv4 (contournement du filtre IPv4) :
+ALWAYS_BLOCKED.addSubnet('::', 96, 'ipv6'); // IPv4-compatible (inclut ::1)
+ALWAYS_BLOCKED.addSubnet('64:ff9b::', 96, 'ipv6'); // NAT64
+ALWAYS_BLOCKED.addSubnet('2002::', 16, 'ipv6'); // 6to4
 ALWAYS_BLOCKED.addSubnet('fe80::', 10, 'ipv6');
 ALWAYS_BLOCKED.addSubnet('ff00::', 8, 'ipv6');
 

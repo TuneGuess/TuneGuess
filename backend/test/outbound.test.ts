@@ -35,7 +35,8 @@ test('normalizeServerUrl : http(s) seulement', () => {
 
 test('isForbiddenTarget : réseaux privés et métadonnées', () => {
   delete process.env.JELLYFIN_ALLOW_PRIVATE_NETWORK;
-  for (const ip of ['127.0.0.1', '10.1.2.3', '192.168.1.1', '172.20.0.1', '100.100.1.1', '169.254.169.254', '0.0.0.0', '::1', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:169.254.169.254']) { // scan:ok
+  for (const ip of ['127.0.0.1', '10.1.2.3', '192.168.1.1', '172.20.0.1', '100.100.1.1', '169.254.169.254', '0.0.0.0', '::1', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:169.254.169.254', // scan:ok
+    '64:ff9b::7f00:1', '2002:7f00:1::', '::7f00:1', '198.18.0.1', '198.19.255.1', '192.0.0.8', '100.64.0.1', '240.0.0.1', '255.255.255.255', '224.0.0.1', 'ff02::1']) { // scan:ok
     assert.equal(isForbiddenTarget(ip), true, ip);
   }
   assert.equal(isForbiddenTarget('1.1.1.1'), false);
@@ -44,6 +45,7 @@ test('isForbiddenTarget : réseaux privés et métadonnées', () => {
   try {
     assert.equal(isForbiddenTarget('192.168.1.1'), false); // scan:ok
     assert.equal(isForbiddenTarget('169.254.169.254'), true, 'métadonnées toujours bloquées');
+    assert.equal(isForbiddenTarget('64:ff9b::a9fe:a9fe'), true, 'NAT64 toujours bloqué');
   } finally {
     delete process.env.JELLYFIN_ALLOW_PRIVATE_NETWORK;
   }
