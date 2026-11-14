@@ -1,6 +1,6 @@
 import { Room } from './Room';
 import { Player } from './Player';
-import { generateRoomCode } from './utils';
+import { generateRoomCode, MAX_ROOM_PLAYERS } from './utils';
 
 export class RoomManager {
   private rooms: Record<string, Room> = {};
@@ -56,7 +56,7 @@ export class RoomManager {
 
   public getPublicRoomList() {
     return Object.values(this.rooms)
-      .filter((r) => r.status === 'waiting' && r.players.length < 10)
+      .filter((r) => r.status === 'waiting' && r.players.length < MAX_ROOM_PLAYERS)
       .map((r) => r.getPublicSummary());
   }
 }

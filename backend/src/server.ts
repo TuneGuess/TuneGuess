@@ -387,7 +387,7 @@ app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response
     res.status(404).json({ error: 'Room introuvable' });
     return;
   }
-  if (!name || typeof name !== 'string' || !name.trim()) {
+  if (!sanitizeInput(name)) {
     res.status(400).json({ error: 'Nom invalide' });
     return;
   }
@@ -396,7 +396,7 @@ app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response
     res.status(404).json({ error: 'Joueur introuvable' });
     return;
   }
-  player.name = name.trim();
+  player.name = sanitizeInput(name);
   emitRoomPlayers(room);
   res.json(getRoomSummary(room));
 });
@@ -514,6 +514,35 @@ function startRoundTimer(room: Room) {
   room.roundTimeout = setTimeout(() => {
     emitRoundState(room);
   }, durationMs);
+}
+
+function endGame(room: Room) {
+  io.to(room.id).emit('game_over', {
+    players: [...room.players].sort((a, b) => b.score - a.score),
+  });
+  room.status = 'waiting';
+  room.currentQuestion = null;
+  room.resetForRound();
+  startInactivityTimer(room);
+  broadcastActiveRooms();
+}
+
+// Verrou : la recherche Deezer est asynchrone, deux start_game/next_round simultanés
+// lanceraient sinon deux manches et compteraient deux tours.
+async function selectNextQuestionLocked(room: Room) {
+  room.advancing = true;
+  try {
+    return await room.selectNextQuestion();
+  } finally {
+    room.advancing = false;
+  }
+}
+
+function startQuestion(room: Room, result: NonNullable<Awaited<ReturnType<Room['selectNextQuestion']>>>) {
+  room.currentQuestion = result.selected;
+  startRoundTimer(room);
+  io.to(room.id).emit('new_question', result.questionData);
+  emitRoundState(room);
 }
 
 // Délai avant fermeture automatique d'une room inactive
@@ -655,7 +684,7 @@ io.on('connection', (socket: Socket) => {
     if (!room) return;
     if (room.creatorId !== socket.id) return;
     if (room.players.length < 2) return;
-    if (room.status === 'playing') return;
+    if (room.status === 'playing' || room.advancing) return;
 
     room.status = 'playing';
     room.resetForRound();
@@ -664,7 +693,8 @@ io.on('connection', (socket: Socket) => {
     room.clearInactivityTimer();
     broadcastActiveRooms();
 
-    const result = await room.selectNextQuestion();
+    const result = await selectNextQuestionLocked(room);
+    if (room.status !== 'playing') return;
     if (!result) {
       room.status = 'waiting';
       startInactivityTimer(room);
@@ -672,16 +702,12 @@ io.on('connection', (socket: Socket) => {
       io.to(room.id).emit('no_tracks');
       return;
     }
-
-    room.currentQuestion = result.selected;
-    startRoundTimer(room);
-    io.to(room.id).emit('new_question', result.questionData);
-    emitRoundState(room);
+    startQuestion(room, result);
   });
 
   socket.on('next_round', async () => {
     const room = getSocketRoom(socket);
-    if (!room || room.status !== 'playing') return;
+    if (!room || room.status !== 'playing' || room.advancing) return;
     if (room.creatorId !== socket.id) return;
 
     const roundState = room.getRoundState(Date.now());
@@ -691,29 +717,19 @@ io.on('connection', (socket: Socket) => {
     }
 
     if (room.currentRound >= room.settings.maxRounds) {
-      io.to(room.id).emit('game_over', {
-        players: [...room.players].sort((a, b) => b.score - a.score),
-      });
-      room.status = 'waiting';
-      room.currentQuestion = null;
-      room.resetForRound();
-      startInactivityTimer(room);
-      broadcastActiveRooms();
+      endGame(room);
       return;
     }
 
     room.resetForRound();
-    const result = await room.selectNextQuestion();
-
+    const result = await selectNextQuestionLocked(room);
+    if (room.status !== 'playing') return;
+    // Plus aucun morceau inédit : la partie se termine au lieu de rester bloquée.
     if (!result) {
-      io.to(room.id).emit('no_tracks');
+      endGame(room);
       return;
     }
-
-    room.currentQuestion = result.selected;
-    startRoundTimer(room);
-    io.to(room.id).emit('new_question', result.questionData);
-    emitRoundState(room);
+    startQuestion(room, result);
   });
 
   socket.on('answer', ({ playerId }: { playerId: unknown }) => {

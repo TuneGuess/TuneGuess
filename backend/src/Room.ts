@@ -64,6 +64,7 @@ export class Room {
   public currentRound = 0;
   public playedTrackIds = new Set<string>();
   public roundTimeout: NodeJS.Timeout | null = null;
+  public advancing = false;
   public inactivityTimeout: NodeJS.Timeout | null = null;
 
   constructor(
