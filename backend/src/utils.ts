@@ -38,7 +38,7 @@ export function safeImageUrl(raw: unknown): string | undefined {
   if (typeof raw !== 'string' || raw.length > 2048) return undefined;
   try {
     const url = new URL(raw);
-    const allowed = IMAGE_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`));
+    const allowed = IMAGE_HOSTS.some((h) => url.hostname.endsWith(`.${h}`)) // sous-domaines seulement, comme la CSP https://*.<hôte>;
     return url.protocol === 'https:' && allowed && !url.username && !url.password ? url.href : undefined;
   } catch {
     return undefined;

@@ -26,7 +26,7 @@ test('store_tracks : schéma strict', () => {
   assert.equal(img('https://i.scdn.co/image/ab67'), 'https://i.scdn.co/image/ab67');
   assert.equal(img('https://i.ytimg.com/vi/x/hq.jpg'), 'https://i.ytimg.com/vi/x/hq.jpg');
   assert.equal(img('https://e-cdns-images.dzcdn.net/c.jpg'), 'https://e-cdns-images.dzcdn.net/c.jpg');
-  for (const bad of ['http://i.scdn.co/a', 'https://evilscdn.co/a', 'https://scdn.co.evil.com/a', 'https://u:p@i.scdn.co/a', 'javascript:alert(1)']) { // identifiants dans l'URL (scan:ok)
+  for (const bad of ['http://i.scdn.co/a', 'https://evilscdn.co/a', 'https://scdn.co/a','https://scdn.co.evil.com/a', 'https://u:p@i.scdn.co/a', 'javascript:alert(1)']) { // identifiants dans l'URL (scan:ok)
     assert.equal(img(bad), undefined, bad);
   }
   assert.equal(parseTrackPayload({ tracks: [{ ...track, deezerId: '3135556' }] })?.tracks[0].deezerId, '3135556');

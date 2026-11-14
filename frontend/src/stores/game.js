@@ -275,6 +275,11 @@ export const useGameStore = defineStore('game', () => {
       settings.value = s;
     });
 
+    // Refus du serveur à la connexion (limite par adresse) : socket.io ne retente pas, on l'affiche.
+    socket.on('connect_error', (err) => {
+      roomError.value = err?.message || 'Connexion au serveur impossible.';
+    });
+
     socket.on('room_error', ({ message }) => {
       roomError.value = message || 'Erreur salon.';
     });
