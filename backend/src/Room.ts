@@ -57,6 +57,7 @@ export class Room {
   // mediaKey : identifiant opaque de l'extrait Jellyfin de la manche, seul moyen d'atteindre le proxy.
   public currentQuestion: { track: StoredTrack; playerId: string; mediaKey: string | null } | null = null;
   public answeredPlayers = new Set<string>();
+  public roundStartedAtMs: number | null = null;
   public roundEndsAtMs: number | null = null;
   public status: 'waiting' | 'playing' = 'waiting';
   public settings: RoomSettings = { maxRounds: 10, roundDuration: 30 };
@@ -193,9 +194,13 @@ export class Room {
     };
   }
 
-  public submitAnswer(playerId: string, answerPlayerId: string, points: number): { correct: boolean; correctPlayerId: string } {
+  /** Points calculés ici, au barème qu'appliquait le front : 1000 - ms écoulées, 100 au minimum. */
+  public submitAnswer(playerId: string, answerPlayerId: string, nowMs: number): { correct: boolean; correctPlayerId: string } {
     if (!this.currentQuestion || this.answeredPlayers.has(playerId)) {
       throw new Error("Action invalide.");
+    }
+    if (this.roundStartedAtMs === null || this.roundEndsAtMs === null || nowMs >= this.roundEndsAtMs) {
+      throw new Error("Manche terminée.");
     }
 
     this.answeredPlayers.add(playerId);
@@ -203,8 +208,7 @@ export class Room {
     const player = this.players.find((p) => p.id === playerId);
 
     if (isCorrect && player) {
-      const safePoints = Math.min(10000, Math.max(0, Number(points) || 0));
-      player.score += safePoints;
+      player.score += Math.max(1000 - (nowMs - this.roundStartedAtMs), 100);
     }
 
     return {
@@ -222,6 +226,7 @@ export class Room {
 
   public resetForRound(): void {
     this.answeredPlayers = new Set<string>();
+    this.roundStartedAtMs = null;
     this.roundEndsAtMs = null;
     if (this.roundTimeout) {
       clearTimeout(this.roundTimeout);

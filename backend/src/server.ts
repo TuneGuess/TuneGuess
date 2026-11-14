@@ -482,6 +482,7 @@ function emitRoundState(room: Room) {
 function startRoundTimer(room: Room) {
   const now = Date.now();
   const durationMs = Math.max(10, Math.min(120, Math.floor(room.settings.roundDuration))) * 1000;
+  room.roundStartedAtMs = now;
   room.roundEndsAtMs = now + durationMs;
 
   if (room.roundTimeout) {
@@ -684,12 +685,12 @@ io.on('connection', (socket: Socket) => {
     emitRoundState(room);
   });
 
-  socket.on('answer', ({ playerId, points }: { playerId: unknown; points: unknown }) => {
+  socket.on('answer', ({ playerId }: { playerId: unknown }) => {
     const room = getSocketRoom(socket);
     if (!room || !room.currentQuestion || room.answeredPlayers.has(socket.id)) return;
 
     try {
-      const res = room.submitAnswer(socket.id, playerId as string, Number(points) || 0);
+      const res = room.submitAnswer(socket.id, playerId as string, Date.now());
       socket.emit('answer_result', res);
       emitRoomPlayers(room);
       emitRoundState(room);

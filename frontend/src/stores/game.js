@@ -460,11 +460,10 @@ export const useGameStore = defineStore('game', () => {
     socket.emit('start_game');
   }
 
+  // Les points sont calculés par le serveur à partir de l'heure de réception.
   function submitGuess(playerId) {
     if (!startTime.value) return;
-    const elapsed = Date.now() - startTime.value;
-    const points = Math.max(1000 - elapsed, 100);
-    socket.emit('answer', { playerId, points });
+    socket.emit('answer', { playerId });
   }
 
   function nextRound() {
