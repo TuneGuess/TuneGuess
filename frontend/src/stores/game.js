@@ -88,9 +88,9 @@ export const useGameStore = defineStore('game', () => {
     return data;
   }
 
-  // Le serveur n'accepte que ces champs (jamais d'URL) ; il retrouve lui-même extraits et pochettes.
+  // Le serveur n'accepte que ces champs ; il retrouve lui-même les extraits et ne garde que les images d'hôtes connus.
   function emitTracks(tracks, jellyfin) {
-    const payload = tracks.map(({ id, provider, name, artists, albumName }) => ({ id, provider, name, artists, albumName }));
+    const payload = tracks.map(({ id, provider, name, artists, albumName, imageUrl, deezerId }) => ({ id, provider, name, artists, albumName, imageUrl, deezerId }));
     socket.emit('store_tracks', { tracks: payload, jellyfin });
   }
 

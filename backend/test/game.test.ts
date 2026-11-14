@@ -7,10 +7,16 @@ import { Room } from '../src/Room';
 import { Client, closeAll } from './socketClient';
 
 const PREVIEW = 'https://cdnt-preview.dzcdn.net/test.mp3';
+const PREVIEW_BY_ID = 'https://cdnt-preview.dzcdn.net/par-id.mp3';
+const requested: string[] = [];
 
 // Deezer simulé (lent, pour que deux next_round se chevauchent) : aucun appel réseau réel.
 axios.defaults.adapter = async (config) => {
   await new Promise((r) => setTimeout(r, 50));
+  requested.push(String(config.url));
+  if (String(config.url).startsWith('https://api.deezer.com/track/')) {
+    return { data: { preview: PREVIEW_BY_ID, album: {} }, status: 200, statusText: 'OK', headers: {}, config };
+  }
   return {
     data: { data: [{ preview: PREVIEW, artist: { name: 'Artiste' }, album: { cover_medium: 'https://cdn-images.dzcdn.net/c.jpg' } }] },
     status: 200, statusText: 'OK', headers: {}, config,
@@ -56,6 +62,20 @@ test('store_tracks invalide refusé, URL du client ignorée', async () => {
   const question = await host.next('new_question');
   assert.equal(question.track.preview_url, PREVIEW, 'extrait issu de la recherche serveur, jamais du client');
   assert.ok(!('previewUrl' in room.playerTracks[host.id][0]));
+});
+
+test('id Deezer (Last.fm) : extrait par api.deezer.com/track/{id}, pochette du client gardée', async () => {
+  const { host, guest } = await roomWithTwoPlayers();
+  const cover = 'https://i.scdn.co/image/pochette';
+  const withId = (p: string) => tracks(p).map((t) => ({ ...t, provider: 'lastfm', deezerId: '42', imageUrl: cover }));
+  host.emit('store_tracks', { tracks: withId('c') });
+  guest.emit('store_tracks', { tracks: withId('d') });
+  await new Promise((r) => setTimeout(r, 50));
+  host.emit('start_game');
+  const question = await host.next('new_question');
+  assert.equal(question.track.preview_url, PREVIEW_BY_ID);
+  assert.equal(question.track.image, cover, 'Deezer sans pochette : celle du client (hôte autorisé)');
+  assert.ok(requested.includes('https://api.deezer.com/track/42'));
 });
 
 test('points calculés par le serveur, réponse tardive refusée', () => {

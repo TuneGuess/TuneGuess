@@ -100,6 +100,7 @@ export class LastFmProvider implements MusicProvider {
         albumName: albumName || deezerTrack.album?.title || '',
         imageUrl: deezerTrack.album?.cover_medium || '',
         previewUrl: deezerTrack.preview,
+        deezerId: deezerTrack.id ? String(deezerTrack.id) : undefined,
       };
     } catch {
       return null;

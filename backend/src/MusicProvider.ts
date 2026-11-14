@@ -6,6 +6,8 @@ export interface GenericTrack {
   albumName?: string;
   imageUrl?: string;
   previewUrl: string | null;
+  /** Id Deezer déjà validé : le serveur en retrouve l'extrait sur api.deezer.com (hôte fixe). */
+  deezerId?: string;
 }
 
 export interface MusicProvider {

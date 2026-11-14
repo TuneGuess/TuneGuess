@@ -31,6 +31,31 @@ export function getRoomCodeFromId(roomId: string | undefined): string {
   return roomId.startsWith('room-') ? roomId.slice(5).toUpperCase() : roomId.toUpperCase();
 }
 
+// Hôtes d'images que le navigateur peut charger (pochettes Spotify, YouTube, Deezer) : https seulement.
+const IMAGE_HOSTS = ['scdn.co', 'ytimg.com', 'dzcdn.net'];
+
+export function safeImageUrl(raw: unknown): string | undefined {
+  if (typeof raw !== 'string' || raw.length > 2048) return undefined;
+  try {
+    const url = new URL(raw);
+    const allowed = IMAGE_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`));
+    return url.protocol === 'https:' && allowed && !url.username && !url.password ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Extrait d'un morceau Deezer connu ; l'id est numérique (validé à la réception), l'hôte est fixe. */
+export const getDeezerTrackById = async (deezerId: string): Promise<{ preview: string; image: string } | null> => {
+  try {
+    const { data } = await axios.get(`https://api.deezer.com/track/${encodeURIComponent(deezerId)}`);
+    if (data?.preview) return { preview: data.preview, image: data.album?.cover_medium || '' };
+  } catch (error: any) {
+    console.error(`Erreur Deezer pour le morceau ${deezerId}:`, error.message);
+  }
+  return null;
+};
+
 // Minuscules, sans accents ni ponctuation : « Beyoncé » et « beyonce » se valent.
 const normalize = (text: string) => text.normalize('NFD').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 

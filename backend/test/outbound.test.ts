@@ -19,7 +19,18 @@ test('store_tracks : schéma strict', () => {
 
   // Les URL fournies par le client sont ignorées : seuls les champs connus sont gardés.
   const parsed = parseTrackPayload({ tracks: [{ ...track, previewUrl: 'http://169.254.169.254/', imageUrl: 'x' }] });
-  assert.deepEqual(parsed, { tracks: [{ ...track, albumName: undefined }] });
+  assert.deepEqual(parsed, { tracks: [{ ...track, albumName: undefined, imageUrl: undefined, deezerId: undefined }] });
+
+  // Images : https et hôtes de pochettes connus seulement ; id Deezer numérique.
+  const img = (imageUrl: string) => parseTrackPayload({ tracks: [{ ...track, imageUrl }] })?.tracks[0].imageUrl;
+  assert.equal(img('https://i.scdn.co/image/ab67'), 'https://i.scdn.co/image/ab67');
+  assert.equal(img('https://i.ytimg.com/vi/x/hq.jpg'), 'https://i.ytimg.com/vi/x/hq.jpg');
+  assert.equal(img('https://e-cdns-images.dzcdn.net/c.jpg'), 'https://e-cdns-images.dzcdn.net/c.jpg');
+  for (const bad of ['http://i.scdn.co/a', 'https://evilscdn.co/a', 'https://scdn.co.evil.com/a', 'https://u:p@i.scdn.co/a', 'javascript:alert(1)']) { // identifiants dans l'URL (scan:ok)
+    assert.equal(img(bad), undefined, bad);
+  }
+  assert.equal(parseTrackPayload({ tracks: [{ ...track, deezerId: '3135556' }] })?.tracks[0].deezerId, '3135556');
+  assert.equal(parseTrackPayload({ tracks: [{ ...track, deezerId: '1/../x' }] }), null);
 
   const withJellyfin = parseTrackPayload({ tracks: [track], jellyfin: { serverUrl: 'https://u:p@jf.example/' , token: 'abc' } });
   assert.equal(withJellyfin, null, 'identifiants dans l\'URL refusés');

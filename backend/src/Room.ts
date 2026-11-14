@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { Player } from './Player';
-import { findDeezerTrack, MAX_ROOM_PLAYERS } from './utils';
+import { findDeezerTrack, getDeezerTrackById, MAX_ROOM_PLAYERS, safeImageUrl } from './utils';
 import { GenericTrack } from './MusicProvider';
 import { normalizeServerUrl } from './outbound';
 
@@ -9,8 +9,8 @@ export interface RoomSettings {
   roundDuration: number;
 }
 
-/** Ce que le serveur garde d'un morceau envoyé par un client : jamais d'URL. */
-export type StoredTrack = Pick<GenericTrack, 'id' | 'provider' | 'name' | 'artists' | 'albumName'>;
+/** Ce que le serveur garde d'un morceau envoyé par un client : seule URL, une image d'un hôte autorisé. */
+export type StoredTrack = Pick<GenericTrack, 'id' | 'provider' | 'name' | 'artists' | 'albumName' | 'imageUrl' | 'deezerId'>;
 export interface JellyfinSource { serverUrl: string; token: string }
 
 export const MAX_STORED_TRACKS = 200;
@@ -25,17 +25,20 @@ export function parseTrackPayload(payload: unknown): { tracks: StoredTrack[]; je
   const stored: StoredTrack[] = [];
   for (const t of tracks) {
     if (!t || typeof t !== 'object') return null;
-    const { id, provider, name, artists, albumName } = t as Record<string, unknown>;
+    const { id, provider, name, artists, albumName, imageUrl, deezerId } = t as Record<string, unknown>;
     if (typeof id !== 'string' || !/^[\w-]{1,64}$/.test(id)) return null;
     if (!PROVIDERS.includes(provider as GenericTrack['provider'])) return null;
     if (typeof name !== 'string' || typeof artists !== 'string') return null;
     if (albumName !== undefined && typeof albumName !== 'string') return null;
+    if (deezerId !== undefined && (typeof deezerId !== 'string' || !/^\d{1,20}$/.test(deezerId))) return null;
     stored.push({
       id,
       provider: provider as GenericTrack['provider'],
       name: name.slice(0, MAX_TEXT),
       artists: artists.slice(0, MAX_TEXT),
       albumName: albumName?.slice(0, MAX_TEXT),
+      imageUrl: safeImageUrl(imageUrl), // hôte non autorisé : image ignorée, morceau gardé
+      deezerId,
     });
   }
 
@@ -167,9 +170,9 @@ export class Room {
     if (trackId) this.playedTrackIds.add(trackId);
     const name = track.name;
     const artists = track.artists;
-    const deezer = await findDeezerTrack(name, artists);
+    const deezer = (track.deezerId && (await getDeezerTrackById(track.deezerId))) || (await findDeezerTrack(name, artists));
     let finalPreviewUrl: string | null = deezer?.preview || null;
-    let finalImageUrl = deezer?.image || '';
+    let finalImageUrl = deezer?.image || track.imageUrl || '';
     if (selected.mediaKey) {
       const media = `roomId=${encodeURIComponent(this.id)}&key=${selected.mediaKey}`;
       finalPreviewUrl ||= `/api/proxy/jellyfin/stream?${media}`;
