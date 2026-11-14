@@ -2,10 +2,16 @@ import { Room } from './Room';
 import { Player } from './Player';
 import { generateRoomCode, MAX_ROOM_PLAYERS } from './utils';
 
+// Plafond global : chaque salon garde des morceaux et des minuteries en mémoire.
+export const MAX_ROOMS = 500;
+
 export class RoomManager {
   private rooms: Record<string, Room> = {};
 
   public createRoom(roomName: string, hostId: string, hostName: string): Room {
+    if (Object.keys(this.rooms).length >= MAX_ROOMS) {
+      throw new Error('Trop de salons ouverts, réessayez plus tard.');
+    }
     let code: string;
     let roomId: string;
     do {

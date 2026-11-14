@@ -503,6 +503,11 @@ function leaveCurrentRoom(socket: Socket) {
 // Événements qui créent un salon, stockent des données ou appellent Deezer.
 const COSTLY_EVENTS = new Set(['create_room', 'join_room', 'store_tracks', 'start_game', 'next_round']);
 const allowSocketEvent = rateLimiter(30, 60_000);
+// Par IP : un client qui ouvre des dizaines de sockets ne multiplie pas ses salons.
+// 20 connexions laissent un salon complet (10 joueurs) derrière une même box, onglets en plus.
+const MAX_CONNECTIONS_PER_IP = 20;
+const connectionsPerIp = new Map<string, number>();
+const allowCreateRoom = rateLimiter(10, 60_000);
 
 function emitRoomPlayers(room: Room) {
   io.to(room.id).emit('update_players', room.players);
@@ -582,6 +587,23 @@ function startInactivityTimer(room: Room) {
   }, delayMs);
 }
 
+io.use((socket, next) => {
+  const ip = clientIp(socket.request);
+  const count = connectionsPerIp.get(ip) || 0;
+  if (count >= MAX_CONNECTIONS_PER_IP) {
+    next(new Error('Trop de connexions depuis cette adresse.'));
+    return;
+  }
+  connectionsPerIp.set(ip, count + 1);
+  socket.data.ip = ip;
+  socket.on('disconnect', () => {
+    const left = (connectionsPerIp.get(ip) || 1) - 1;
+    if (left > 0) connectionsPerIp.set(ip, left);
+    else connectionsPerIp.delete(ip);
+  });
+  next();
+});
+
 io.on('connection', (socket: Socket) => {
   console.log('Connexion socket:', socket.id);
 
@@ -606,8 +628,18 @@ io.on('connection', (socket: Socket) => {
       return;
     }
 
+    if (!allowCreateRoom(socket.data.ip)) {
+      socket.emit('room_error', { message: 'Trop de salons créés depuis cette adresse, réessayez dans une minute.' });
+      return;
+    }
+    let room: Room;
+    try {
+      room = roomManager.createRoom(safeRoomName, socket.id, safePlayerName);
+    } catch (err: any) {
+      socket.emit('room_error', { message: err.message });
+      return;
+    }
     leaveCurrentRoom(socket);
-    const room = roomManager.createRoom(safeRoomName, socket.id, safePlayerName);
     socket.data.roomId = room.id;
     socket.join(room.id);
     startInactivityTimer(room);
