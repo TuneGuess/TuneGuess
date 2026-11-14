@@ -33,7 +33,7 @@ export function getRoomCodeFromId(roomId: string | undefined): string {
   return roomId.startsWith('room-') ? roomId.slice(5).toUpperCase() : roomId.toUpperCase();
 }
 
-export const fetchDeezerPreview = async (trackName: string, artistName: string): Promise<string | null> => {
+export const findDeezerTrack = async (trackName: string, artistName: string): Promise<{ preview: string; image: string } | null> => {
   try {
     const cleanTrack = trackName.split(/[(\[-]/)[0].trim();
     const cleanArtist = artistName.split(/[(\[-]/)[0].trim();
@@ -42,8 +42,9 @@ export const fetchDeezerPreview = async (trackName: string, artistName: string):
     const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}`;
     const response = await axios.get(url);
 
-    if (response.data?.data?.length > 0) {
-      return response.data.data[0].preview;
+    const item = response.data?.data?.[0];
+    if (item?.preview) {
+      return { preview: item.preview, image: item.album?.cover_medium || '' };
     }
   } catch (error: any) {
     console.error(`Erreur recherche Deezer pour "${artistName} - ${trackName}":`, error.message);

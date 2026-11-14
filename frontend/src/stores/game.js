@@ -79,7 +79,6 @@ export const useGameStore = defineStore('game', () => {
       const data = await res.json().catch(() => ({}));
       const err = new Error(data.error || "Impossible de récupérer les morceaux.");
       err.code = data.code;
-      err.details = data.details;
       throw err;
     }
     const data = await res.json();
@@ -87,6 +86,12 @@ export const useGameStore = defineStore('game', () => {
       throw new Error("Format de réponse de l'API invalide.");
     }
     return data;
+  }
+
+  // Le serveur n'accepte que ces champs (jamais d'URL) ; il retrouve lui-même extraits et pochettes.
+  function emitTracks(tracks, jellyfin) {
+    const payload = tracks.map(({ id, provider, name, artists, albumName }) => ({ id, provider, name, artists, albumName }));
+    socket.emit('store_tracks', { tracks: payload, jellyfin });
   }
 
   async function loadSpotifyTracks(spotifyToken) {
@@ -126,14 +131,13 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé dans votre bibliothèque Spotify.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks);
       spotifyLinked.value = true;
     } catch (err) {
       console.error("Erreur Spotify tracks loading:", err);
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'spotify'
       };
       spotifyLinked.value = false;
@@ -160,14 +164,13 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé dans votre bibliothèque YouTube.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks);
       youtubeLinked.value = true;
     } catch (err) {
       console.error("Erreur YouTube tracks loading:", err);
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'youtube'
       };
       youtubeLinked.value = false;
@@ -195,7 +198,7 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé pour cet utilisateur Last.fm.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks);
       lastfmLinked.value = true;
       lastfmUsername.value = username;
       localStorage.setItem('lastfm_username', username);
@@ -204,7 +207,6 @@ export const useGameStore = defineStore('game', () => {
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'lastfm'
       };
       lastfmLinked.value = false;
@@ -546,14 +548,13 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé sur votre serveur Jellyfin.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks, { serverUrl, token });
       jellyfinLinked.value = true;
     } catch (err) {
       console.error("Erreur Jellyfin tracks loading:", err);
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'jellyfin'
       };
       jellyfinLinked.value = false;

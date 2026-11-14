@@ -6,11 +6,10 @@ dotenv.config();
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import http from 'http';
-import axios from 'axios';
 import { Server, Socket } from 'socket.io';
 
 import { Player } from './Player';
-import { Room } from './Room';
+import { parseTrackPayload, Room } from './Room';
 import { RoomManager } from './RoomManager';
 import { sanitizeInput } from './utils';
 import { SpotifyProvider } from './SpotifyProvider';
@@ -164,7 +163,7 @@ app.post('/auth/jellyfin/initiate', async (req: Request, res: Response) => {
     res.json(data);
   } catch (error: any) {
     console.error("Erreur d'initialisation Jellyfin:", error.message);
-    res.status(500).json({ error: error.message });
+    res.status(502).json({ error: "Serveur Jellyfin injoignable" });
   }
 });
 
@@ -179,24 +178,15 @@ app.post('/auth/jellyfin/authenticate', async (req: Request, res: Response) => {
     res.json(data); // returns { token, userId, serverId } or null if not yet authenticated
   } catch (error: any) {
     console.error("Erreur d'authentification Jellyfin:", error.message);
-    res.status(500).json({ error: error.message });
+    res.status(502).json({ error: "Serveur Jellyfin injoignable" });
   }
 });
 
 // --- UNIFIED TRACKS API ---
+// Le corps de la réponse amont n'est jamais renvoyé : seul un code d'erreur sort.
 function handleProviderError(res: Response, error: any, defaultMessage: string, provider: string) {
-  const status = error.response?.status || 500;
-  let details = error.message || "Erreur inconnue";
-  
-  if (error.response?.data) {
-    if (provider === 'spotify') {
-      details = error.response.data.error?.message || JSON.stringify(error.response.data);
-    } else if (provider === 'youtube') {
-      details = error.response.data.error?.message || JSON.stringify(error.response.data);
-    } else if (provider === 'jellyfin') {
-      details = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
-    }
-  }
+  const upstreamStatus = error.response?.status;
+  const status = upstreamStatus === 401 || upstreamStatus === 403 ? upstreamStatus : 502;
 
   let code = 'API_ERROR';
   if (provider === 'spotify') {
@@ -212,14 +202,13 @@ function handleProviderError(res: Response, error: any, defaultMessage: string, 
   } else if (provider === 'jellyfin') {
     if (status === 401 || status === 403) {
       code = 'JELLYFIN_UNAUTHORIZED';
-    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ERR_BAD_RESPONSE') {
+    } else if (['ENOTFOUND', 'ECONNREFUSED', 'ERR_BAD_RESPONSE', 'ECONNABORTED', 'EADDRBLOCKED'].includes(error.code)) {
       code = 'JELLYFIN_CONNECTION_ERROR';
     }
   }
 
   res.status(status).json({
     error: defaultMessage,
-    details,
     code
   });
 }
@@ -283,108 +272,44 @@ app.get('/api/tracks/recent', async (req: Request, res: Response) => {
 });
 
 // --- JELLYFIN PROXY ENDPOINTS (SECURITY & PRIVACY) ---
-app.get('/api/proxy/jellyfin/stream', async (req: Request, res: Response) => {
-  const { roomId, playerId, trackId } = req.query as { roomId: string; playerId: string; trackId: string };
-  if (!roomId || !playerId || !trackId) {
-    res.status(400).send("Paramètres manquants");
-    return;
-  }
+// Seul l'extrait de la manche en cours est servi, désigné par une clé opaque ; l'URL est reconstruite ici.
+const MAX_PROXY_BYTES = 50 * 1024 * 1024;
+const PROXY_TYPES = { stream: /^(audio\/|application\/octet-stream)/, image: /^image\/(?!svg)/ };
 
-  const room = roomManager.getRoomById(roomId);
-  if (!room) {
-    res.status(404).send("Salon introuvable");
-    return;
-  }
-
-  const tracks = room.playerTracks[playerId];
-  if (!tracks) {
-    res.status(404).send("Joueur introuvable ou pas de morceaux");
-    return;
-  }
-
-  const track = tracks.find((t) => t.id === trackId);
-  if (!track || !track.previewUrl) {
-    res.status(404).send("Morceau ou extrait introuvable");
+app.get('/api/proxy/jellyfin/:kind', async (req: Request, res: Response) => {
+  const kind = req.params.kind as string;
+  const { roomId, key } = req.query;
+  const room = typeof roomId === 'string' ? roomManager.getRoomById(roomId) : null;
+  const question = room?.status === 'playing' ? room.currentQuestion : null;
+  const source = question ? room!.jellyfinSources[question.playerId] : undefined;
+  if ((kind !== 'stream' && kind !== 'image') || !question?.mediaKey || question.mediaKey !== key || !source) {
+    res.status(404).send("Média introuvable");
     return;
   }
 
   try {
-    const response = await axios({
-      method: 'get',
-      url: track.previewUrl,
-      responseType: 'stream',
-      headers: {
-        Range: req.headers.range || ''
-      },
-      validateStatus: () => true
+    const range = kind === 'stream' && typeof req.headers.range === 'string' ? req.headers.range : undefined;
+    const upstream = await jellyfinProvider.fetchMedia(source.serverUrl, source.token, question.track.id, kind, range);
+    if (!PROXY_TYPES[kind].test(String(upstream.headers['content-type'] || ''))) {
+      upstream.data.destroy();
+      res.status(502).send("Média invalide");
+      return;
+    }
+
+    res.status(upstream.status);
+    for (const header of ['content-type', 'content-range', 'accept-ranges', 'content-length']) {
+      if (upstream.headers[header]) res.setHeader(header, upstream.headers[header] as string);
+    }
+    let bytes = 0;
+    upstream.data.on('data', (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > MAX_PROXY_BYTES) upstream.data.destroy();
     });
-
-    res.status(response.status);
-    if (response.headers['content-type']) {
-      res.setHeader('content-type', response.headers['content-type'] as any);
-    }
-    if (response.headers['content-range']) {
-      res.setHeader('content-range', response.headers['content-range'] as any);
-    }
-    if (response.headers['accept-ranges']) {
-      res.setHeader('accept-ranges', response.headers['accept-ranges'] as any);
-    }
-    if (response.headers['content-length']) {
-      res.setHeader('content-length', response.headers['content-length'] as any);
-    }
-
-    response.data.pipe(res);
+    res.on('close', () => upstream.data.destroy());
+    upstream.data.pipe(res);
   } catch (error: any) {
-    console.error("Erreur proxy stream Jellyfin:", error.message);
-    res.status(500).send("Erreur lors de la lecture du flux audio");
-  }
-});
-
-app.get('/api/proxy/jellyfin/image', async (req: Request, res: Response) => {
-  const { roomId, playerId, trackId } = req.query as { roomId: string; playerId: string; trackId: string };
-  if (!roomId || !playerId || !trackId) {
-    res.status(400).send("Paramètres manquants");
-    return;
-  }
-
-  const room = roomManager.getRoomById(roomId);
-  if (!room) {
-    res.status(404).send("Salon introuvable");
-    return;
-  }
-
-  const tracks = room.playerTracks[playerId];
-  if (!tracks) {
-    res.status(404).send("Joueur introuvable ou pas de morceaux");
-    return;
-  }
-
-  const track = tracks.find((t) => t.id === trackId);
-  if (!track || !track.imageUrl) {
-    res.status(404).send("Morceau ou image introuvable");
-    return;
-  }
-
-  try {
-    const response = await axios({
-      method: 'get',
-      url: track.imageUrl,
-      responseType: 'stream',
-      validateStatus: () => true
-    });
-
-    res.status(response.status);
-    if (response.headers['content-type']) {
-      res.setHeader('content-type', response.headers['content-type'] as any);
-    }
-    if (response.headers['content-length']) {
-      res.setHeader('content-length', response.headers['content-length'] as any);
-    }
-
-    response.data.pipe(res);
-  } catch (error: any) {
-    console.error("Erreur proxy image Jellyfin:", error.message);
-    res.status(500).send("Erreur de chargement de l'image");
+    console.error(`Erreur proxy ${kind} Jellyfin:`, error.message);
+    res.status(502).send("Média indisponible");
   }
 });
 
@@ -677,10 +602,15 @@ io.on('connection', (socket: Socket) => {
     io.to(room.id).emit('room_settings', room.settings);
   });
 
-  socket.on('store_tracks', (tracks: unknown) => {
+  socket.on('store_tracks', (payload: unknown) => {
     const room = getSocketRoom(socket);
-    if (!room || !Array.isArray(tracks)) return;
-    room.storeTracks(socket.id, tracks);
+    if (!room) return;
+    const parsed = parseTrackPayload(payload);
+    if (!parsed) {
+      socket.emit('room_error', { message: 'Liste de morceaux invalide.' });
+      return;
+    }
+    room.storeTracks(socket.id, parsed.tracks, parsed.jellyfin);
   });
 
   socket.on('start_game', async () => {
