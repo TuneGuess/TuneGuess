@@ -11,7 +11,7 @@ export class YouTubeProvider implements MusicProvider {
       : 'http://127.0.0.1:5000/auth/youtube/callback');
 
 
-  public getAuthorizationUrl(): string {
+  public getAuthorizationUrl(state: string): string {
     const scope = 'https://www.googleapis.com/auth/youtube.readonly';
     return 'https://accounts.google.com/o/oauth2/v2/auth?' +
       querystring.stringify({
@@ -19,8 +19,7 @@ export class YouTubeProvider implements MusicProvider {
         client_id: this.clientId,
         scope: scope,
         redirect_uri: this.redirectUri,
-        access_type: 'offline',
-        prompt: 'consent'
+        state,
       });
   }
 

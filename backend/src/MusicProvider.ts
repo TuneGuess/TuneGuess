@@ -9,7 +9,7 @@ export interface GenericTrack {
 }
 
 export interface MusicProvider {
-  getAuthorizationUrl(): string;
+  getAuthorizationUrl(state?: string): string;
   getAccessToken(code: string): Promise<string>;
   getUserTopTracks(token: string, options?: any): Promise<GenericTrack[]>;
   getUserRecentTracks(token: string, options?: any): Promise<GenericTrack[]>;

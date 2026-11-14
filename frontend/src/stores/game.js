@@ -73,8 +73,8 @@ export const useGameStore = defineStore('game', () => {
     socket.emit('list_active_rooms');
   }
 
-  async function fetchTracks(endpoint) {
-    const res = await fetch(endpoint);
+  async function fetchTracks(endpoint, token) {
+    const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       const err = new Error(data.error || "Impossible de récupérer les morceaux.");
@@ -114,8 +114,8 @@ export const useGameStore = defineStore('game', () => {
         // Non bloquant
       }
 
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${spotifyToken}&provider=spotify`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${spotifyToken}&provider=spotify`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=spotify`, spotifyToken);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=spotify`, spotifyToken);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();
@@ -147,8 +147,8 @@ export const useGameStore = defineStore('game', () => {
   async function loadYouTubeTracks(youtubeToken) {
     roomError.value = '';
     try {
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${youtubeToken}&provider=youtube`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${youtubeToken}&provider=youtube`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=youtube`, youtubeToken);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=youtube`, youtubeToken);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();
@@ -180,9 +180,8 @@ export const useGameStore = defineStore('game', () => {
   async function loadLastfmTracks(username) {
     roomError.value = '';
     try {
-      const encodedUser = encodeURIComponent(username);
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${encodedUser}&provider=lastfm`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${encodedUser}&provider=lastfm`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=lastfm`, username);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=lastfm`, username);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();
@@ -326,6 +325,8 @@ export const useGameStore = defineStore('game', () => {
 
   function initFromRoute(router) {
     bindSocketListeners(router);
+    // Reliquat d'une ancienne version qui laissait le jeton OAuth dans le localStorage.
+    localStorage.removeItem('oauth_token_received');
 
     const params = new URLSearchParams(window.location.search);
     const inviteCode = params.get('room');
@@ -336,18 +337,22 @@ export const useGameStore = defineStore('game', () => {
       router.replace({ name: 'lobby', query: { room: code } });
     }
 
-    handleOAuthReturn(router);
+    handleOAuthReturn();
   }
 
-  function handleOAuthReturn(router) {
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    const provider = urlParams.get('provider') || 'spotify';
+  function handleOAuthReturn() {
+    // Le serveur renvoie le jeton dans le fragment (#), qui n'est jamais transmis au serveur.
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const token = hashParams.get('token');
+    const provider = hashParams.get('provider') || 'spotify';
     if (!token || oauthHandled) return;
     oauthHandled = true;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
 
-    // 1. Écriture du token dans le localStorage pour la fenêtre parente (fallback universel)
+    // 1. Fallback pour la fenêtre parente si l'opener est perdu : l'événement storage suffit,
+    //    le jeton est retiré aussitôt et ne reste jamais stocké.
     localStorage.setItem('oauth_token_received', `${provider}|${token}`);
+    localStorage.removeItem('oauth_token_received');
 
     // 2. Notification via postMessage si l'opener existe
     if (window.opener) {
@@ -530,8 +535,8 @@ export const useGameStore = defineStore('game', () => {
   async function loadJellyfinTracks(token, serverUrl, userId) {
     roomError.value = '';
     try {
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${token}&provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${userId}`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${token}&provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${userId}`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${encodeURIComponent(userId)}`, token);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${encodeURIComponent(userId)}`, token);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();

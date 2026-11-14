@@ -6,6 +6,7 @@ dotenv.config();
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import http from 'http';
+import { randomBytes } from 'crypto';
 import { Server, Socket } from 'socket.io';
 
 import { Player } from './Player';
@@ -112,45 +113,46 @@ const jellyfinProvider = new JellyfinProvider();
 const youtubeProvider = new YouTubeProvider();
 const lastFmProvider = new LastFmProvider();
 
-// --- SPOTIFY AUTHENTICATION ---
-app.get('/auth/spotify/login', (req: Request, res: Response) => {
-  res.redirect(spotifyProvider.getAuthorizationUrl());
-});
+// --- SPOTIFY / YOUTUBE AUTHENTICATION ---
+// `state` aléatoire gardé dans un cookie HttpOnly (anti-CSRF de connexion) ; le jeton
+// revient au front dans le fragment (#), jamais envoyé au serveur ni écrit dans les journaux.
+for (const [name, provider] of [['spotify', spotifyProvider], ['youtube', youtubeProvider]] as const) {
+  const stateCookie = `oauth_state_${name}`;
 
-app.get('/auth/spotify/callback', async (req: Request, res: Response) => {
-  const code = (req.query.code as string) || null;
-  if (!code) {
-    res.status(400).send("Code manquant");
-    return;
-  }
-  try {
-    const access_token = await spotifyProvider.getAccessToken(code);
-    res.redirect(`${FRONTEND_URL}?provider=spotify&token=${access_token}`);
-  } catch (error: any) {
-    console.error("Erreur Callback Spotify:", error.message);
-    res.status(500).send("Erreur d'authentification");
-  }
-});
+  app.get(`/auth/${name}/login`, (req: Request, res: Response) => {
+    const state = randomBytes(16).toString('hex');
+    res.cookie(stateCookie, state, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: FRONTEND_URL.startsWith('https:'),
+      maxAge: 10 * 60 * 1000,
+      path: '/auth',
+    });
+    res.redirect(provider.getAuthorizationUrl(state));
+  });
 
-// --- YOUTUBE AUTHENTICATION ---
-app.get('/auth/youtube/login', (req: Request, res: Response) => {
-  res.redirect(youtubeProvider.getAuthorizationUrl());
-});
-
-app.get('/auth/youtube/callback', async (req: Request, res: Response) => {
-  const code = (req.query.code as string) || null;
-  if (!code) {
-    res.status(400).send("Code manquant");
-    return;
-  }
-  try {
-    const access_token = await youtubeProvider.getAccessToken(code);
-    res.redirect(`${FRONTEND_URL}?provider=youtube&token=${access_token}`);
-  } catch (error: any) {
-    console.error("Erreur Callback YouTube:", error.message);
-    res.status(500).send("Erreur d'authentification");
-  }
-});
+  app.get(`/auth/${name}/callback`, async (req: Request, res: Response) => {
+    const code = typeof req.query.code === 'string' ? req.query.code : null;
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const expected = req.headers.cookie?.match(new RegExp(`(?:^|;\\s*)${stateCookie}=([^;]+)`))?.[1];
+    res.clearCookie(stateCookie, { path: '/auth' });
+    if (!expected || !safeEqual(state, expected)) {
+      res.status(400).send("Requête d'authentification invalide");
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Code manquant");
+      return;
+    }
+    try {
+      const access_token = await provider.getAccessToken(code);
+      res.redirect(`${FRONTEND_URL}#provider=${name}&token=${encodeURIComponent(access_token)}`);
+    } catch (error: any) {
+      console.error(`Erreur Callback ${name}:`, error.message);
+      res.status(500).send("Erreur d'authentification");
+    }
+  });
+}
 
 // --- JELLYFIN AUTHENTICATION ---
 app.post('/auth/jellyfin/initiate', async (req: Request, res: Response) => {
@@ -214,8 +216,13 @@ function handleProviderError(res: Response, error: any, defaultMessage: string, 
   });
 }
 
+// Jeton du fournisseur (ou pseudo Last.fm) en en-tête : jamais dans l'URL ni les journaux d'accès.
+function bearerToken(req: Request): string {
+  return (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+}
+
 app.get('/api/tracks/top', async (req: Request, res: Response) => {
-  const token = req.query.token as string;
+  const token = bearerToken(req);
   const provider = (req.query.provider as string) || 'spotify';
   const serverUrl = req.query.serverUrl as string;
   const userId = req.query.userId as string;
@@ -244,7 +251,7 @@ app.get('/api/tracks/top', async (req: Request, res: Response) => {
 });
 
 app.get('/api/tracks/recent', async (req: Request, res: Response) => {
-  const token = req.query.token as string;
+  const token = bearerToken(req);
   const provider = (req.query.provider as string) || 'spotify';
   const serverUrl = req.query.serverUrl as string;
   const userId = req.query.userId as string;
@@ -335,8 +342,7 @@ export function adminAuth(req: Request, res: Response, next: NextFunction) {
     return;
   }
 
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const token = bearerToken(req);
   if (!token || !safeEqual(token, password)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
