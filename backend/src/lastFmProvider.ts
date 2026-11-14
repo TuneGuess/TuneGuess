@@ -67,40 +67,42 @@ export class LastFmProvider implements MusicProvider {
   private async enrichTracksWithDeezer(lastFmTracks: any[]): Promise<GenericTrack[]> {
     const genericTracks: GenericTrack[] = [];
 
-    // On boucle sur les morceaux et on cherche un équivalent audio sur Deezer
-    for (const track of lastFmTracks) {
-      const trackName = track.name || '';
-      const artistName = track.artist?.name || track.artist?.['#text'] || '';
-      const albumName = track.album?.title || '';
-
-      try {
-        // Recherche du morceau exact sur l'API publique de Deezer
-        const query = `artist:"${artistName}" track:"${trackName}"`;
-        const deezerSearch = await axios.get('https://api.deezer.com/search', {
-          params: { q: query, limit: 1 }
-        });
-
-        const deezerTrack = deezerSearch.data?.data?.[0];
-
-        // On ne l'ajoute que si Deezer a trouvé un extrait audio valide pour le jeu
-        if (deezerTrack && deezerTrack.preview) {
-          genericTracks.push({
-            id: `lastfm-${deezerTrack.id || Math.random().toString(36).substr(2, 9)}`,
-            provider: 'lastfm',
-            name: trackName,
-            artists: artistName || 'Artiste Inconnu',
-            albumName: albumName || deezerTrack.album?.title || '',
-            imageUrl: deezerTrack.album?.cover_medium || '',
-            previewUrl: deezerTrack.preview,
-          });
-        }
-      } catch (err) {
-        continue;
-      }
-
-      if (genericTracks.length >= 20) break;
+    // Recherches Deezer par lots de 5 en parallèle : rapide sans inonder l'API.
+    for (let i = 0; i < lastFmTracks.length && genericTracks.length < 20; i += 5) {
+      const found = await Promise.all(lastFmTracks.slice(i, i + 5).map((track) => this.findOnDeezer(track)));
+      for (const track of found) if (track) genericTracks.push(track);
     }
 
-    return genericTracks;
+    return genericTracks.slice(0, 20);
+  }
+
+  private async findOnDeezer(track: any): Promise<GenericTrack | null> {
+    const trackName = track.name || '';
+    const artistName = track.artist?.name || track.artist?.['#text'] || '';
+    const albumName = track.album?.title || '';
+
+    try {
+      // Recherche du morceau exact sur l'API publique de Deezer
+      const query = `artist:"${artistName}" track:"${trackName}"`;
+      const deezerSearch = await axios.get('https://api.deezer.com/search', {
+        params: { q: query, limit: 1 }
+      });
+
+      const deezerTrack = deezerSearch.data?.data?.[0];
+
+      // On ne l'ajoute que si Deezer a trouvé un extrait audio valide pour le jeu
+      if (!deezerTrack?.preview) return null;
+      return {
+        id: `lastfm-${deezerTrack.id || Math.random().toString(36).substr(2, 9)}`,
+        provider: 'lastfm',
+        name: trackName,
+        artists: artistName || 'Artiste Inconnu',
+        albumName: albumName || deezerTrack.album?.title || '',
+        imageUrl: deezerTrack.album?.cover_medium || '',
+        previewUrl: deezerTrack.preview,
+      };
+    } catch {
+      return null;
+    }
   }
 }

@@ -38,20 +38,20 @@ export class RoomManager {
   }
 
   public deleteRoom(roomId: string): boolean {
-    if (!this.rooms[roomId]) {
+    const room = this.rooms[roomId];
+    if (!room) {
       return false;
     }
+    // Minuteries arrêtées : sinon elles gardent le salon en mémoire et se déclenchent après coup.
+    room.resetForRound();
+    room.clearInactivityTimer();
     delete this.rooms[roomId];
     return true;
   }
 
   public deleteRoomIfEmpty(roomId: string): boolean {
     const room = this.rooms[roomId];
-    if (room && room.players.length === 0) {
-      delete this.rooms[roomId];
-      return true;
-    }
-    return false;
+    return !!room && room.players.length === 0 && this.deleteRoom(roomId);
   }
 
   public getPublicRoomList() {

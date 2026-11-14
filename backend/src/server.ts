@@ -8,6 +8,7 @@ import cors from 'cors';
 import http from 'http';
 import { randomBytes } from 'crypto';
 import { Server, Socket } from 'socket.io';
+import axios from 'axios';
 
 import { Player } from './Player';
 import { parseTrackPayload, Room } from './Room';
@@ -20,6 +21,36 @@ import { YouTubeProvider } from './YouTubeProvider';
 import { LastFmProvider } from './lastFmProvider';
 
 const app = express();
+// Aucune requête sortante sans délai : un fournisseur qui ne répond plus ne bloque pas le serveur.
+axios.defaults.timeout = 10_000;
+// Derrière Caddy/nginx (réseau Docker) : req.ip = vrai client, pour la limite de débit.
+app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+
+// shortcut: compteurs en mémoire du processus, à remplacer par un store partagé si plusieurs instances.
+function rateLimiter(limit: number, windowMs: number) {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of hits) if (entry.resetAt <= now) hits.delete(key);
+  }, windowMs).unref();
+  return (key: string): boolean => {
+    const now = Date.now();
+    const entry = hits.get(key);
+    if (!entry || entry.resetAt <= now) {
+      hits.set(key, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    return ++entry.count <= limit;
+  };
+}
+
+function httpRateLimit(limit: number, windowMs: number) {
+  const allow = rateLimiter(limit, windowMs);
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (allow(req.ip || '')) return next();
+    res.status(429).json({ error: 'Trop de requêtes, réessayez dans une minute.' });
+  };
+}
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_URL;
@@ -70,6 +101,7 @@ app.use(cors({
   }
 }));
 app.use(express.json());
+app.use(['/api', '/auth'], httpRateLimit(120, 60_000));
 
 // --- SEO ENDPOINTS ---
 app.get('/sitemap.xml', (req: Request, res: Response) => {
@@ -368,7 +400,7 @@ function getRoomSummary(room: Room) {
   };
 }
 
-app.use('/admin', adminAuth);
+app.use('/admin', httpRateLimit(30, 60_000), adminAuth);
 
 app.get('/admin/rooms', (req: Request, res: Response) => {
   const rooms = roomManager.getAllRooms().map(getRoomSummary);
@@ -477,6 +509,28 @@ function getSocketRoom(socket: Socket) {
   return roomManager.getRoomById(socket.data.roomId);
 }
 
+// Un socket n'occupe qu'un salon : il quitte l'ancien avant d'en créer ou d'en rejoindre un autre.
+function leaveCurrentRoom(socket: Socket) {
+  const roomId = socket.data.roomId;
+  if (!roomId) return;
+  socket.data.roomId = null;
+  socket.leave(roomId);
+
+  const room = roomManager.getRoomById(roomId);
+  if (!room) return;
+  room.removePlayer(socket.id);
+  if (!roomManager.deleteRoomIfEmpty(roomId)) {
+    emitRoomPlayers(room);
+    if (room.status === 'waiting') io.to(roomId).emit('room_settings', room.settings);
+    if (room.status === 'playing') emitRoundState(room);
+  }
+  broadcastActiveRooms();
+}
+
+// Événements qui créent un salon, stockent des données ou appellent Deezer.
+const COSTLY_EVENTS = new Set(['create_room', 'join_room', 'store_tracks', 'start_game', 'next_round']);
+const allowSocketEvent = rateLimiter(30, 60_000);
+
 function emitRoomPlayers(room: Room) {
   io.to(room.id).emit('update_players', room.players);
 }
@@ -529,6 +583,14 @@ function startInactivityTimer(room: Room) {
 io.on('connection', (socket: Socket) => {
   console.log('Connexion socket:', socket.id);
 
+  socket.use(([event], next) => {
+    if (COSTLY_EVENTS.has(event) && !allowSocketEvent(socket.id)) {
+      socket.emit('room_error', { message: 'Trop de requêtes, réessayez dans une minute.' });
+      return;
+    }
+    next();
+  });
+
   socket.on('list_active_rooms', () => {
     socket.emit('active_rooms', roomManager.getPublicRoomList());
   });
@@ -542,6 +604,7 @@ io.on('connection', (socket: Socket) => {
       return;
     }
 
+    leaveCurrentRoom(socket);
     const room = roomManager.createRoom(safeRoomName, socket.id, safePlayerName);
     socket.data.roomId = room.id;
     socket.join(room.id);
@@ -577,7 +640,8 @@ io.on('connection', (socket: Socket) => {
 
     try {
       const newPlayer = new Player(socket.id, safePlayerName, 0, false);
-      room.addPlayer(newPlayer);
+      room.addPlayer(newPlayer); // refuse aussi le salon où l'on est déjà
+      leaveCurrentRoom(socket);
 
       socket.data.roomId = room.id;
       socket.join(room.id);
@@ -713,57 +777,12 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('leave_room', () => {
-    const roomId = socket.data.roomId;
-    if (!roomId) return;
-
-    const room = roomManager.getRoomById(roomId);
-    if (!room) {
-      socket.data.roomId = null;
-      socket.leave(roomId);
-      return;
-    }
-
-    room.removePlayer(socket.id);
-    socket.leave(roomId);
-    socket.data.roomId = null;
-
-    if (room.players.length === 0) {
-      roomManager.deleteRoomIfEmpty(roomId);
-    } else {
-      emitRoomPlayers(room);
-      if (room.status === 'waiting') {
-        io.to(roomId).emit('room_settings', room.settings);
-      }
-      if (room.status === 'playing') {
-        emitRoundState(room);
-      }
-    }
-
-    broadcastActiveRooms();
+    if (!socket.data.roomId) return;
+    leaveCurrentRoom(socket);
     socket.emit('left_room');
   });
 
-  socket.on('disconnect', () => {
-    const roomId = socket.data.roomId;
-    if (!roomId) return;
-
-    const room = roomManager.getRoomById(roomId);
-    if (!room) return;
-
-    room.removePlayer(socket.id);
-
-    const deleted = roomManager.deleteRoomIfEmpty(roomId);
-
-    if (!deleted) {
-      emitRoomPlayers(room);
-      if (room.status === 'waiting') {
-        broadcastActiveRooms();
-      }
-      if (room.status === 'playing') {
-        emitRoundState(room);
-      }
-    }
-  });
+  socket.on('disconnect', () => leaveCurrentRoom(socket));
 });
 
 server.listen(PORT, () => {
