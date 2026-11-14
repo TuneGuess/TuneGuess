@@ -762,6 +762,11 @@ io.on('connection', (socket: Socket) => {
   socket.on('disconnect', () => leaveCurrentRoom(socket));
 });
 
-server.listen(PORT, () => {
-  console.log(`Serveur TuneGuess sur http://127.0.0.1:${PORT}`);
-});
+// Les tests importent le module et écoutent eux-mêmes sur un port libre.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Serveur TuneGuess sur http://127.0.0.1:${PORT}`);
+  });
+}
+
+export { app, server, io, roomManager };
