@@ -20,9 +20,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     # Joignable seulement via Caddy. Pour l'admin, publier sur une interface privée,
-    # ex. ports: ["127.0.0.1:8080:80"] puis tunnel SSH.
+    # ex. ports: ["127.0.0.1:8080:8080"] puis tunnel SSH.
     expose:
-      - "80"
+      - "8080"
     depends_on:
       - backend
     networks:
