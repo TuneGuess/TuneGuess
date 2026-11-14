@@ -104,7 +104,7 @@ cp example.docker-compose.yml docker-compose.yml
 docker compose up --build -d
 ```
 
-**Admin** : Caddy refuse `/admin` côté public. Pour l'utiliser, publiez `web` sur une interface privée (ex. `ports: ["127.0.0.1:8080:8080"]`) et passez par un tunnel SSH (`ssh -L 8080:127.0.0.1:8080 serveur`), puis ouvrez `http://localhost:8080/admin` avec `ADMIN_PASSWORD`. nginx et le backend n'acceptent l'admin que depuis le réseau local ou Tailscale.
+**Admin** : Caddy refuse `/admin` côté public. Pour l'utiliser, publiez `web` sur une interface privée (ex. `ports: ["127.0.0.1:8080:8080"]`) et passez par un tunnel SSH (`ssh -L 8080:127.0.0.1:8080 serveur`), puis ouvrez `http://localhost:8080/admin` avec `ADMIN_PASSWORD`. nginx (via `X-Forwarded-For` de Caddy) et le backend jugent l'admin sur l'IP réelle du client : réseau local ou Tailscale seulement. Côté backend, `X-Forwarded-For` n'est lu que si `TRUST_PROXY` liste les relais de confiance (`uniquelocal` dans l'exemple compose, syntaxe [`trust proxy` d'Express](https://expressjs.com/en/guide/behind-proxies.html)) ; sans `TRUST_PROXY`, c'est l'IP de la connexion qui compte (à garder si le backend est joint directement).
 
 Vérifiez les logs si nécessaire :
 

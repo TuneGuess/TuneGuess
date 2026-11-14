@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { AddressInfo } from 'net';
 import { randomUUID } from 'crypto';
-import { adminAuth, io, server } from '../src/server';
+import { adminAuth, app, io, server } from '../src/server';
 
 // Mot de passe tiré au hasard à chaque exécution.
 const PASSWORD = randomUUID();
@@ -39,9 +39,23 @@ test('admin : en-tête Host forgé depuis une adresse publique refusé', () => {
     socket: { remoteAddress: '203.0.113.7' },
     headers: { host: 'localhost', authorization: `Bearer ${PASSWORD}`, 'x-forwarded-for': '127.0.0.1' },
     hostname: 'localhost',
+    ip: '203.0.113.7',
   } as any;
   const res = { status: (s: number) => ((status = s), res), json: () => res } as any;
   adminAuth(req, res, () => (nextCalled = true));
   assert.equal(status, 403);
   assert.equal(nextCalled, false);
+});
+
+test('admin : X-Forwarded-For ignoré sans TRUST_PROXY, pris en compte avec', async () => {
+  process.env.ADMIN_PASSWORD = PASSWORD;
+  const forwarded = () =>
+    fetch(`${base}/admin/rooms`, { headers: { Authorization: `Bearer ${PASSWORD}`, 'X-Forwarded-For': '203.0.113.7' } });
+  assert.equal((await forwarded()).status, 200, 'sans relais de confiance : IP du socket (loopback)');
+  app.set('trust proxy', 'loopback');
+  try {
+    assert.equal((await forwarded()).status, 403, 'relais loopback de confiance : IP publique transmise');
+  } finally {
+    app.set('trust proxy', false);
+  }
 });

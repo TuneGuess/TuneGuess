@@ -23,8 +23,20 @@ import { LastFmProvider } from './lastFmProvider';
 const app = express();
 // Aucune requête sortante sans délai : un fournisseur qui ne répond plus ne bloque pas le serveur.
 axios.defaults.timeout = 10_000;
-// Derrière Caddy/nginx (réseau Docker) : req.ip = vrai client, pour la limite de débit.
-app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+// TRUST_PROXY : relais dont on croit X-Forwarded-For (syntaxe `trust proxy` d'Express, ex.
+// « uniquelocal » pour Caddy→nginx en réseau Docker, ou un nombre de sauts). Absent : IP du socket.
+const TRUST_PROXY = process.env.TRUST_PROXY?.trim();
+if (TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
+
+/** IP du client d'une requête brute (socket.io), même règle que req.ip d'Express. */
+function clientIp(req: http.IncomingMessage): string {
+  const trust = app.get('trust proxy fn') as (addr: string, i: number) => boolean;
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',').map((a) => a.trim()).filter(Boolean);
+  const chain = [req.socket.remoteAddress || '', ...forwarded.reverse()];
+  let i = 0;
+  while (i < chain.length - 1 && trust(chain[i], i)) i++;
+  return chain[i];
+}
 
 // shortcut: compteurs en mémoire du processus, à remplacer par un store partagé si plusieurs instances.
 function rateLimiter(limit: number, windowMs: number) {
@@ -329,8 +341,8 @@ export function adminAuth(req: Request, res: Response, next: NextFunction) {
     return;
   }
 
-  // Adresse TCP réelle (l'en-tête Host est choisi par le client) : loopback, réseau privé ou Tailscale.
-  if (!isPrivateAddress(req.socket.remoteAddress || '')) {
+  // IP du client (socket, ou X-Forwarded-For des seuls relais TRUST_PROXY ; jamais l'en-tête Host).
+  if (!isPrivateAddress(req.ip || '')) {
     res.status(403).json({ error: 'Forbidden: Admin access is only allowed from local or Tailscale connections' });
     return;
   }
