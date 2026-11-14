@@ -53,6 +53,7 @@ export class DeezerProvider implements MusicProvider {
             albumName: item.album?.title || '',
             imageUrl: item.album?.cover_medium || '',
             previewUrl: item.preview || null,
+            deezerId: String(item.id),
         }));
     }
 
@@ -73,6 +74,7 @@ export class DeezerProvider implements MusicProvider {
             albumName: item.album?.title || '',
             imageUrl: item.album?.cover_medium || '',
             previewUrl: item.preview || null,
+            deezerId: String(item.id),
         }));
     }
 }

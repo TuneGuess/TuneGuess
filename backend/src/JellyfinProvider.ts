@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { MusicProvider, GenericTrack } from './MusicProvider';
+import { normalizeServerUrl, outbound } from './outbound';
 
 export class JellyfinProvider implements MusicProvider {
   private clientHeaders(token?: string) {
@@ -19,8 +19,8 @@ export class JellyfinProvider implements MusicProvider {
   }
 
   public async initiateQuickConnect(serverUrl: string): Promise<{ code: string; secret: string }> {
-    const url = `${serverUrl.replace(/\/$/, '')}/QuickConnect/Initiate`;
-    const response = await axios.post(url, {}, { headers: this.clientHeaders() });
+    const url = `${normalizeServerUrl(serverUrl)}/QuickConnect/Initiate`;
+    const response = await outbound.post(url, {}, { headers: this.clientHeaders() });
     return {
       code: response.data.Code,
       secret: response.data.Secret
@@ -28,13 +28,14 @@ export class JellyfinProvider implements MusicProvider {
   }
 
   public async pollQuickConnect(serverUrl: string, secret: string): Promise<{ token: string; userId: string; serverId: string } | null> {
-    const cleanUrl = serverUrl.replace(/\/$/, '');
-    const connectUrl = `${cleanUrl}/QuickConnect/Connect?secret=${secret}`;
-    
-    const response = await axios.get(connectUrl, { headers: this.clientHeaders() });
+    const cleanUrl = normalizeServerUrl(serverUrl);
+    const response = await outbound.get(`${cleanUrl}/QuickConnect/Connect`, {
+      params: { secret },
+      headers: this.clientHeaders(),
+    });
     if (response.data?.Authenticated) {
       const authUrl = `${cleanUrl}/Users/AuthenticateWithQuickConnect`;
-      const authResponse = await axios.post(authUrl, { Secret: secret }, { headers: this.clientHeaders() });
+      const authResponse = await outbound.post(authUrl, { Secret: secret }, { headers: this.clientHeaders() });
       return {
         token: authResponse.data.AccessToken,
         userId: authResponse.data.User.Id,
@@ -48,15 +49,16 @@ export class JellyfinProvider implements MusicProvider {
     if (!options?.serverUrl || !options?.userId) {
       throw new Error("Jellyfin requiert serverUrl et userId.");
     }
-    const cleanUrl = options.serverUrl.replace(/\/$/, '');
-    const url = `${cleanUrl}/Users/${options.userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=PlayCount&sortOrder=Descending&filters=IsPlayed`;
-    const response = await axios.get(url, { headers: this.clientHeaders(token) });
+    const cleanUrl = normalizeServerUrl(options.serverUrl);
+    const userId = encodeURIComponent(options.userId);
+    const url = `${cleanUrl}/Users/${userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=PlayCount&sortOrder=Descending&filters=IsPlayed`;
+    const response = await outbound.get(url, { headers: this.clientHeaders(token) });
     let items = response.data.Items || [];
 
     if (items.length < 20) {
-      const fallbackUrl = `${cleanUrl}/Users/${options.userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=Random`;
+      const fallbackUrl = `${cleanUrl}/Users/${userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=Random`;
       try {
-        const fallbackResponse = await axios.get(fallbackUrl, { headers: this.clientHeaders(token) });
+        const fallbackResponse = await outbound.get(fallbackUrl, { headers: this.clientHeaders(token) });
         const fallbackItems = fallbackResponse.data.Items || [];
         const seenIds = new Set(items.map((i: any) => i.Id));
         for (const item of fallbackItems) {
@@ -68,22 +70,23 @@ export class JellyfinProvider implements MusicProvider {
         // Ignorer l'erreur du fallback
       }
     }
-    return this.mapItemsToTracks(items.slice(0, 50), cleanUrl, token);
+    return this.mapItemsToTracks(items.slice(0, 50));
   }
 
   public async getUserRecentTracks(token: string, options?: { serverUrl: string; userId: string }): Promise<GenericTrack[]> {
     if (!options?.serverUrl || !options?.userId) {
       throw new Error("Jellyfin requiert serverUrl et userId.");
     }
-    const cleanUrl = options.serverUrl.replace(/\/$/, '');
-    const url = `${cleanUrl}/Users/${options.userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=DatePlayed&sortOrder=Descending&filters=IsPlayed`;
-    const response = await axios.get(url, { headers: this.clientHeaders(token) });
+    const cleanUrl = normalizeServerUrl(options.serverUrl);
+    const userId = encodeURIComponent(options.userId);
+    const url = `${cleanUrl}/Users/${userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=DatePlayed&sortOrder=Descending&filters=IsPlayed`;
+    const response = await outbound.get(url, { headers: this.clientHeaders(token) });
     let items = response.data.Items || [];
 
     if (items.length < 20) {
-      const fallbackUrl = `${cleanUrl}/Users/${options.userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=DateCreated&sortOrder=Descending`;
+      const fallbackUrl = `${cleanUrl}/Users/${userId}/Items?includeItemTypes=Audio&recursive=true&limit=50&sortBy=DateCreated&sortOrder=Descending`;
       try {
-        const fallbackResponse = await axios.get(fallbackUrl, { headers: this.clientHeaders(token) });
+        const fallbackResponse = await outbound.get(fallbackUrl, { headers: this.clientHeaders(token) });
         const fallbackItems = fallbackResponse.data.Items || [];
         const seenIds = new Set(items.map((i: any) => i.Id));
         for (const item of fallbackItems) {
@@ -95,25 +98,31 @@ export class JellyfinProvider implements MusicProvider {
         // Ignorer l'erreur du fallback
       }
     }
-    return this.mapItemsToTracks(items.slice(0, 50), cleanUrl, token);
+    return this.mapItemsToTracks(items.slice(0, 50));
   }
 
-  private mapItemsToTracks(items: any[], serverUrl: string, token: string): GenericTrack[] {
+  /** Extrait audio ou pochette d'un morceau, URL reconstruite côté serveur. */
+  public fetchMedia(serverUrl: string, token: string, itemId: string, kind: 'stream' | 'image', range?: string) {
+    const id = encodeURIComponent(itemId);
+    const path = kind === 'stream'
+      ? `/Audio/${id}/stream?static=true`
+      : `/Items/${id}/Images/Primary?fillWidth=300&fillHeight=300`;
+    return outbound.get(`${normalizeServerUrl(serverUrl)}${path}`, {
+      responseType: 'stream',
+      headers: { ...this.clientHeaders(token), ...(range ? { Range: range } : {}) },
+    });
+  }
+
+  private mapItemsToTracks(items: any[]): GenericTrack[] {
     return items.map((item) => {
       const artists = Array.isArray(item.Artists) ? item.Artists.join(', ') : (item.AlbumArtist || '');
-      const imageUrl = item.ImageTags?.Primary
-        ? `${serverUrl}/Items/${item.Id}/Images/Primary?fillWidth=300&fillHeight=300`
-        : undefined;
-      const previewUrl = `${serverUrl}/Audio/${item.Id}/stream?static=true&api_key=${token}`;
-
       return {
         id: item.Id,
         provider: 'jellyfin',
         name: item.Name,
         artists: artists || 'Artiste Inconnu',
         albumName: item.Album || '',
-        imageUrl,
-        previewUrl
+        previewUrl: null
       };
     });
   }

@@ -7,7 +7,7 @@ export class SpotifyProvider implements MusicProvider {
   private clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
   private redirectUri = process.env.SPOTIFY_REDIRECT_URI || process.env.REDIRECT_URI;
 
-  public getAuthorizationUrl(): string {
+  public getAuthorizationUrl(state: string): string {
     const scope = 'user-read-recently-played user-top-read';
     return 'https://accounts.spotify.com/authorize?' +
       querystring.stringify({
@@ -15,6 +15,7 @@ export class SpotifyProvider implements MusicProvider {
         client_id: this.clientId,
         scope: scope,
         redirect_uri: this.redirectUri,
+        state,
       });
   }
 

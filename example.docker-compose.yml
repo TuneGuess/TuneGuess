@@ -19,8 +19,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "8080:80"
+    # Joignable seulement via Caddy. Pour l'admin, publier sur une interface privée,
+    # ex. ports: ["127.0.0.1:8080:8080"] puis tunnel SSH.
+    expose:
+      - "8080"
     depends_on:
       - backend
     networks:
@@ -31,17 +33,15 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    # FRONTEND_URL, CORS_ORIGIN, *_REDIRECT_URI et ADMIN_PASSWORD : dans .env (voir README).
     env_file:
       - .env
     environment:
-      FRONTEND_URL: http://localhost:8080
-      CORS_ORIGIN: http://localhost:8080
-      SPOTIFY_REDIRECT_URI: http://localhost:8080/auth/spotify/callback
-      GOOGLE_REDIRECT_URI: http://localhost:8080/auth/youtube/callback
       PORT: "5000"
-      ADMIN_PASSWORD: "admin-local-secret"
-    ports:
-      - "5000:5000"
+      # Caddy et nginx sont sur le réseau Docker : leur X-Forwarded-For donne l'IP du client.
+      TRUST_PROXY: "uniquelocal"
+    expose:
+      - "5000"
     networks:
       - tuneguess
 

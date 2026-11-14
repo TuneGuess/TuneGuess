@@ -73,13 +73,12 @@ export const useGameStore = defineStore('game', () => {
     socket.emit('list_active_rooms');
   }
 
-  async function fetchTracks(endpoint) {
-    const res = await fetch(endpoint);
+  async function fetchTracks(endpoint, token) {
+    const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       const err = new Error(data.error || "Impossible de récupérer les morceaux.");
       err.code = data.code;
-      err.details = data.details;
       throw err;
     }
     const data = await res.json();
@@ -87,6 +86,12 @@ export const useGameStore = defineStore('game', () => {
       throw new Error("Format de réponse de l'API invalide.");
     }
     return data;
+  }
+
+  // Le serveur n'accepte que ces champs ; il retrouve lui-même les extraits et ne garde que les images d'hôtes connus.
+  function emitTracks(tracks, jellyfin) {
+    const payload = tracks.map(({ id, provider, name, artists, albumName, imageUrl, deezerId }) => ({ id, provider, name, artists, albumName, imageUrl, deezerId }));
+    socket.emit('store_tracks', { tracks: payload, jellyfin });
   }
 
   async function loadSpotifyTracks(spotifyToken) {
@@ -109,8 +114,8 @@ export const useGameStore = defineStore('game', () => {
         // Non bloquant
       }
 
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${spotifyToken}&provider=spotify`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${spotifyToken}&provider=spotify`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=spotify`, spotifyToken);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=spotify`, spotifyToken);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();
@@ -126,14 +131,13 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé dans votre bibliothèque Spotify.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks);
       spotifyLinked.value = true;
     } catch (err) {
       console.error("Erreur Spotify tracks loading:", err);
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'spotify'
       };
       spotifyLinked.value = false;
@@ -143,8 +147,8 @@ export const useGameStore = defineStore('game', () => {
   async function loadYouTubeTracks(youtubeToken) {
     roomError.value = '';
     try {
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${youtubeToken}&provider=youtube`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${youtubeToken}&provider=youtube`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=youtube`, youtubeToken);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=youtube`, youtubeToken);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();
@@ -160,14 +164,13 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé dans votre bibliothèque YouTube.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks);
       youtubeLinked.value = true;
     } catch (err) {
       console.error("Erreur YouTube tracks loading:", err);
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'youtube'
       };
       youtubeLinked.value = false;
@@ -177,9 +180,8 @@ export const useGameStore = defineStore('game', () => {
   async function loadLastfmTracks(username) {
     roomError.value = '';
     try {
-      const encodedUser = encodeURIComponent(username);
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${encodedUser}&provider=lastfm`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${encodedUser}&provider=lastfm`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=lastfm`, username);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=lastfm`, username);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();
@@ -195,7 +197,7 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé pour cet utilisateur Last.fm.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks);
       lastfmLinked.value = true;
       lastfmUsername.value = username;
       localStorage.setItem('lastfm_username', username);
@@ -204,7 +206,6 @@ export const useGameStore = defineStore('game', () => {
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'lastfm'
       };
       lastfmLinked.value = false;
@@ -274,6 +275,11 @@ export const useGameStore = defineStore('game', () => {
       settings.value = s;
     });
 
+    // Refus du serveur à la connexion (limite par adresse) : socket.io ne retente pas, on l'affiche.
+    socket.on('connect_error', (err) => {
+      roomError.value = err?.message || 'Connexion au serveur impossible.';
+    });
+
     socket.on('room_error', ({ message }) => {
       roomError.value = message || 'Erreur salon.';
     });
@@ -324,6 +330,8 @@ export const useGameStore = defineStore('game', () => {
 
   function initFromRoute(router) {
     bindSocketListeners(router);
+    // Reliquat d'une ancienne version qui laissait le jeton OAuth dans le localStorage.
+    localStorage.removeItem('oauth_token_received');
 
     const params = new URLSearchParams(window.location.search);
     const inviteCode = params.get('room');
@@ -334,18 +342,22 @@ export const useGameStore = defineStore('game', () => {
       router.replace({ name: 'lobby', query: { room: code } });
     }
 
-    handleOAuthReturn(router);
+    handleOAuthReturn();
   }
 
-  function handleOAuthReturn(router) {
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    const provider = urlParams.get('provider') || 'spotify';
+  function handleOAuthReturn() {
+    // Le serveur renvoie le jeton dans le fragment (#), qui n'est jamais transmis au serveur.
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const token = hashParams.get('token');
+    const provider = hashParams.get('provider') || 'spotify';
     if (!token || oauthHandled) return;
     oauthHandled = true;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
 
-    // 1. Écriture du token dans le localStorage pour la fenêtre parente (fallback universel)
+    // 1. Fallback pour la fenêtre parente si l'opener est perdu : l'événement storage suffit,
+    //    le jeton est retiré aussitôt et ne reste jamais stocké.
     localStorage.setItem('oauth_token_received', `${provider}|${token}`);
+    localStorage.removeItem('oauth_token_received');
 
     // 2. Notification via postMessage si l'opener existe
     if (window.opener) {
@@ -458,11 +470,10 @@ export const useGameStore = defineStore('game', () => {
     socket.emit('start_game');
   }
 
+  // Les points sont calculés par le serveur à partir de l'heure de réception.
   function submitGuess(playerId) {
     if (!startTime.value) return;
-    const elapsed = Date.now() - startTime.value;
-    const points = Math.max(1000 - elapsed, 100);
-    socket.emit('answer', { playerId, points });
+    socket.emit('answer', { playerId });
   }
 
   function nextRound() {
@@ -529,8 +540,8 @@ export const useGameStore = defineStore('game', () => {
   async function loadJellyfinTracks(token, serverUrl, userId) {
     roomError.value = '';
     try {
-      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?token=${token}&provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${userId}`);
-      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?token=${token}&provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${userId}`);
+      const recentTracks = await fetchTracks(`${API_BASE}/api/tracks/recent?provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${encodeURIComponent(userId)}`, token);
+      const topTracks = await fetchTracks(`${API_BASE}/api/tracks/top?provider=jellyfin&serverUrl=${encodeURIComponent(serverUrl)}&userId=${encodeURIComponent(userId)}`, token);
 
       const allTracks = [...recentTracks, ...topTracks];
       const seenIds = new Set();
@@ -546,14 +557,13 @@ export const useGameStore = defineStore('game', () => {
         throw new Error("Aucun morceau trouvé sur votre serveur Jellyfin.");
       }
 
-      socket.emit('store_tracks', uniqueTracks);
+      emitTracks(uniqueTracks, { serverUrl, token });
       jellyfinLinked.value = true;
     } catch (err) {
       console.error("Erreur Jellyfin tracks loading:", err);
       roomError.value = {
         message: err.message,
         code: err.code || 'API_ERROR',
-        details: err.details || '',
         provider: 'jellyfin'
       };
       jellyfinLinked.value = false;

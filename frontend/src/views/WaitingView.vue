@@ -13,7 +13,6 @@ const game = useGameStore();
 const activeProviderTab = ref('spotify');
 const jellyfinUrlInput = ref(game.jellyfinServerUrl || '');
 const lastfmUsernameInput = ref(game.lastfmUsername || '');
-const showTechnicalDetails = ref(false);
 
 onMounted(() => {
   if (!game.roomCode && props.code) {
@@ -188,34 +187,6 @@ onMounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-        </div>
-
-        <div v-if="typeof game.roomError === 'object' && game.roomError.details" class="border-t border-[#333] pt-3 mt-1">
-          <button
-              type="button"
-              class="text-xs text-[#8A8585] hover:text-[var(--color-beige)] transition flex items-center gap-1 font-semibold cursor-pointer"
-              @click="showTechnicalDetails = !showTechnicalDetails"
-          >
-            <span>{{ showTechnicalDetails ? 'Masquer' : 'Afficher' }} les détails techniques</span>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="2"
-                stroke="currentColor"
-                class="w-3.5 h-3.5 transition-transform duration-200"
-                :class="{ 'rotate-180': showTechnicalDetails }"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-            </svg>
-          </button>
-
-          <div
-              v-show="showTechnicalDetails"
-              class="mt-2 p-3 bg-black/40 rounded-xl font-mono text-[11px] leading-relaxed text-[#8A8585] overflow-x-auto max-h-32 border border-[#333]"
-          >
-            {{ game.roomError.details }}
-          </div>
         </div>
       </div>
 
