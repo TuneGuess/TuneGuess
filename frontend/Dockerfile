@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
 
 # Image sans root : nginx tourne en utilisateur non privilégié et écoute sur 8080.
-FROM nginxinc/nginx-unprivileged:1.30-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 # L'image amont suit les correctifs alpine avec du retard : on les applique au build.
 USER root
