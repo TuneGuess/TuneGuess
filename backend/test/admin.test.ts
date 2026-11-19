@@ -1,11 +1,12 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { AddressInfo } from 'net';
-import { randomUUID } from 'crypto';
-import { adminAuth, app, io, server } from '../src/server';
+import { db, io, server } from '../src/server';
+import { createUser, setUsername } from '../src/comptes/accounts';
+import { createSession, elevateSession } from '../src/comptes/sessions';
+import { sha256 } from '../src/comptes/secrets';
 
-// Mot de passe tiré au hasard à chaque exécution.
-const PASSWORD = randomUUID();
+// L'admin des salons n'a plus de mot de passe : compte admin + passkey confirmée (ou Tailscale validé).
 let base = '';
 before(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -16,46 +17,35 @@ after(() => {
   server.close();
 });
 
-const get = (password?: string) =>
-  fetch(`${base}/admin/rooms`, { headers: password ? { Authorization: `Bearer ${password}` } : {} });
+function session(role: 'user' | 'admin', name: string, elevated = false) {
+  const user = createUser(db, name, { role });
+  setUsername(db, user.id, name.toLowerCase());
+  const token = createSession(db, user.id);
+  if (elevated) elevateSession(db, sha256(token), false);
+  return `tg_session=${token}`;
+}
 
-test('admin désactivé sans ADMIN_PASSWORD (pas de mot de passe par défaut)', async () => {
-  delete process.env.ADMIN_PASSWORD;
-  assert.equal((await get('admin')).status, 503);
+const salons = (cookie?: string, init: RequestInit = {}) =>
+  fetch(`${base}/api/admin/salons${init.method === 'DELETE' ? '/inconnu' : ''}`, { ...init, headers: { ...(cookie ? { cookie } : {}), ...(init.headers as any) } });
+
+test('admin des salons : connexion, rôle et passkey exigés', async () => {
+  assert.equal((await salons()).status, 401);
+  assert.equal((await salons(session('user', 'Joueur'))).status, 403);
+  const notElevated = await salons(session('admin', 'Chef'));
+  assert.equal(notElevated.status, 403);
+  assert.equal((await notElevated.json()).code, 'PASSKEY_REQUIRED');
+  const ok = await salons(session('admin', 'Cheffe', true));
+  assert.equal(ok.status, 200);
+  assert.ok(Array.isArray(await ok.json()));
 });
 
-test('admin : mauvais mot de passe refusé, bon accepté', async () => {
-  process.env.ADMIN_PASSWORD = PASSWORD;
-  assert.equal((await get()).status, 401);
-  assert.equal((await get('wrong')).status, 401);
-  assert.equal((await get(PASSWORD)).status, 200);
+test('admin des salons : écriture refusée sans la bonne origine', async () => {
+  const cookie = session('admin', 'Gerant', true);
+  assert.equal((await salons(cookie, { method: 'DELETE' })).status, 403, 'pas d\'Origin : CSRF');
+  assert.equal((await salons(cookie, { method: 'DELETE', headers: { origin: 'https://evil.example' } })).status, 403);
+  assert.equal((await salons(cookie, { method: 'DELETE', headers: { origin: 'http://localhost:5173' } })).status, 404, 'origine du site : salon inconnu');
 });
 
-test('admin : en-tête Host forgé depuis une adresse publique refusé', () => {
-  process.env.ADMIN_PASSWORD = PASSWORD;
-  let status = 0;
-  let nextCalled = false;
-  const req = {
-    socket: { remoteAddress: '203.0.113.7' },
-    headers: { host: 'localhost', authorization: `Bearer ${PASSWORD}`, 'x-forwarded-for': '127.0.0.1' },
-    hostname: 'localhost',
-    ip: '203.0.113.7',
-  } as any;
-  const res = { status: (s: number) => ((status = s), res), json: () => res } as any;
-  adminAuth(req, res, () => (nextCalled = true));
-  assert.equal(status, 403);
-  assert.equal(nextCalled, false);
-});
-
-test('admin : X-Forwarded-For ignoré sans TRUST_PROXY, pris en compte avec', async () => {
-  process.env.ADMIN_PASSWORD = PASSWORD;
-  const forwarded = () =>
-    fetch(`${base}/admin/rooms`, { headers: { Authorization: `Bearer ${PASSWORD}`, 'X-Forwarded-For': '203.0.113.7' } });
-  assert.equal((await forwarded()).status, 200, 'sans relais de confiance : IP du socket (loopback)');
-  app.set('trust proxy', 'loopback');
-  try {
-    assert.equal((await forwarded()).status, 403, 'relais loopback de confiance : IP publique transmise');
-  } finally {
-    app.set('trust proxy', false);
-  }
+test('ancienne route /admin/rooms : plus servie par le backend', async () => {
+  assert.equal((await fetch(`${base}/admin/rooms`)).status, 404);
 });

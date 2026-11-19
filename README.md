@@ -1,13 +1,14 @@
 # 🎵 TuneGuess
 
-`TuneGuess` est un jeu musical auto-hébergé où les joueurs devinent des titres à partir de leurs sources musicales (Spotify, YouTube, Jellyfin, Last.fm).
+`TuneGuess` est un jeu musical auto-hébergé où les joueurs devinent des titres à partir de leurs sources musicales (Last.fm, YouTube, Jellyfin).
 
 Ce dépôt contient un backend TypeScript (API + WebSocket) et un frontend Vue 3 (Vite). Le projet peut être lancé en local pour le développement ou déployé facilement avec Docker Compose.
 
 **Résumé rapide**
 - Backend: Node.js + TypeScript
 - Frontend: Vue 3 + Vite
-- Auth providers: Spotify, YouTube, Jellyfin, Last.fm
+- Comptes : Google + passkeys (aucun mot de passe), `@identifiant` obligatoire
+- Sources musicales : Last.fm (principale), Jellyfin (QuickConnect), YouTube (optionnel)
 - Déploiement: Docker & Docker Compose
 
 ---
@@ -26,7 +27,7 @@ Ce dépôt contient un backend TypeScript (API + WebSocket) et un frontend Vue 3
 - Node.js (v18+ recommandé) pour le développement local
 - npm ou yarn
 - Docker & Docker Compose (pour le déploiement en conteneurs)
-- (Optionnel) Comptes développeur pour les providers: Spotify, Google (YouTube)
+- Un client OAuth Google (connexion, YouTube) et une clé d'API Last.fm
 
 ---
 
@@ -39,32 +40,37 @@ Créez un fichier `.env` à la racine (ou utilisez les variables d'environnement
 PORT=5000
 FRONTEND_URL=http://localhost:5173
 CORS_ORIGIN=http://localhost:5173
-REDIRECT_URI=http://localhost:5000/auth/spotify/callback
 
-# Spotify
-SPOTIFY_CLIENT_ID=your_spotify_client_id
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+# Comptes : base SQLite + clé des jetons (dossier à sauvegarder)
+DATA_DIR=./data
+# Obligatoire en production, 32 caractères minimum (openssl rand -hex 32)
+TOKEN_ENCRYPTION_KEY=
 
-# Google / YouTube (optionnel)
+# Google : connexion aux comptes, et YouTube (consentement à part, désactivable)
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:5000/auth/youtube/callback
+# YOUTUBE_ENABLED=false
 
-# Last.fm (optionnel)
+# Last.fm : la clé suffit pour lier un pseudo, le secret active la connexion Last.fm
 LASTFM_API_KEY=your_lastfm_api_key
+LASTFM_API_SECRET=your_lastfm_api_secret
 
-# Admin : sans mot de passe, l'API /admin répond 503 (désactivée)
-ADMIN_PASSWORD=un_long_mot_de_passe_aleatoire
-
-# Jellyfin : les serveurs sur réseau privé (LAN, 127.0.0.1, Tailscale) sont refusés par défaut
+# Jellyfin (QuickConnect) : les serveurs sur réseau privé (LAN, 127.0.0.1, Tailscale) sont refusés par défaut
+# JELLYFIN_ENABLED=false
 # JELLYFIN_ALLOW_PRIVATE_NETWORK=true
+
+# Recrée un code d'amorçage admin au démarrage (accès admin perdu)
+# ADMIN_BOOTSTRAP_RESET=1
 ```
 
 - `CORS_ORIGIN` (par défaut `FRONTEND_URL`) est la seule origine acceptée par l'API et socket.io ; `localhost`/`127.0.0.1` ne sont ajoutés que hors production (`NODE_ENV` différent de `production`).
 - `JELLYFIN_ALLOW_PRIVATE_NETWORK=true` autorise un Jellyfin auto-hébergé sur le réseau local ; à n'activer que si le serveur n'est pas exposé à des inconnus (le backend pourrait sinon être utilisé pour sonder votre réseau). Les adresses de métadonnées cloud (169.254.x.x) restent toujours bloquées.
-- En production, mettez les URL publiques dans `.env` : `FRONTEND_URL`, `CORS_ORIGIN`, `REDIRECT_URI`, `GOOGLE_REDIRECT_URI`. `example.docker-compose.yml` lit ce fichier et ne contient aucun secret.
+- En production, mettez les URL publiques dans `.env` : `FRONTEND_URL`, `CORS_ORIGIN`. `example.docker-compose.yml` lit ce fichier et ne contient aucun secret.
+- Google, Last.fm, YouTube et Jellyfin se règlent aussi dans l'admin (onglet Configuration) : la valeur en base prime sur l'environnement, les secrets y sont chiffrés avec `TOKEN_ENCRYPTION_KEY`.
+- Adresses de retour à déclarer chez Google et Last.fm (`FRONTEND_URL` en tête) : `/auth/compte/google/callback`, `/auth/compte/youtube/callback`, `/auth/compte/lastfm/callback`. L'admin les affiche.
+- YouTube : tant que l'application Google n'est pas validée par Google, seuls 100 utilisateurs de test déclarés dans la console peuvent lier YouTube. Last.fm reste la source principale.
 - Si le front est construit avec `VITE_API_BASE` (API sur une autre origine que le site), ajoutez cette origine (`https://…` et `wss://…`) à `connect-src` dans la CSP de `frontend/nginx.conf`, sinon le navigateur bloque les appels à l'API.
-- Au retour de Spotify/YouTube, le jeton est transmis au navigateur dans le fragment de l'URL (`#token=…`), puis envoyé à l'API dans l'en-tête `Authorization` : il n'apparaît jamais dans les journaux d'accès.
+- Joueur sans compte : au retour de YouTube, le jeton est transmis au navigateur dans le fragment de l'URL (`#token=…`), puis envoyé à l'API dans l'en-tête `Authorization` : il n'apparaît jamais dans les journaux d'accès.
 
 ---
 
@@ -92,7 +98,9 @@ Le frontend Vite démarre par défaut sur `http://localhost:5173`.
 
 3. Jouer
 
-Ouvrez le frontend (`http://localhost:5173`), connectez-vous via un provider (Spotify/YouTube) et créez/rejoignez une partie.
+Ouvrez le frontend (`http://localhost:5173`), créez/rejoignez une partie, puis ajoutez une source (Last.fm, YouTube, Jellyfin, ou celles de votre compte). Il faut 2 joueurs prêts (avec des morceaux) pour lancer. Les joueurs connectés retrouvent leurs parties dans Mon compte → Historique.
+
+**Premier administrateur** : au premier démarrage, le backend écrit dans ses journaux un code d'amorçage. Ouvrez `/admin/amorcage`, saisissez-le et enregistrez une passkey : ce compte devient administrateur. L'admin (`/admin`) exige ensuite une passkey confirmée ; l'API des salons en cours est sous `/api/admin/salons`.
 
 ---
 
@@ -105,7 +113,9 @@ cp example.docker-compose.yml docker-compose.yml
 docker compose up --build -d
 ```
 
-**Admin** : Caddy refuse `/admin` côté public. Pour l'utiliser, publiez `web` sur une interface privée (ex. `ports: ["127.0.0.1:8080:8080"]`) et passez par un tunnel SSH (`ssh -L 8080:127.0.0.1:8080 serveur`), puis ouvrez `http://localhost:8080/admin` avec `ADMIN_PASSWORD`. nginx (via `X-Forwarded-For` de Caddy) et le backend jugent l'admin sur l'IP réelle du client : réseau local ou Tailscale seulement. Côté backend, `X-Forwarded-For` n'est lu que si `TRUST_PROXY` liste les relais de confiance (le sous-réseau Docker fixé dans l'exemple compose, jamais `uniquelocal` qui inclut le réseau local et Tailscale ; syntaxe [`trust proxy` d'Express](https://expressjs.com/en/guide/behind-proxies.html)) ; sans `TRUST_PROXY`, c'est l'IP de la connexion qui compte (à garder si le backend est joint directement).
+**Données** : comptes, sources liées et historique sont dans le volume `tuneguess_data` (`DATA_DIR=/data`) : à sauvegarder. Le code d'amorçage admin s'affiche dans `docker compose logs backend`.
+
+**Admin** : `/admin` est servi publiquement, mais toute l'API d'administration exige un compte administrateur avec une passkey confirmée (ou une connexion depuis une adresse Tailscale déjà validée). Côté backend, `X-Forwarded-For` n'est lu que si `TRUST_PROXY` liste les relais de confiance (le sous-réseau Docker fixé dans l'exemple compose, jamais `uniquelocal` qui inclut le réseau local et Tailscale ; syntaxe [`trust proxy` d'Express](https://expressjs.com/en/guide/behind-proxies.html)) ; sans `TRUST_PROXY`, c'est l'IP de la connexion qui compte (à garder si le backend est joint directement).
 
 Vérifiez les logs si nécessaire :
 
@@ -172,6 +182,6 @@ Merci d'ajouter des tests pour tout changement significatif.
 
 ## Ressources et liens
 
-- Dashboard Spotify Developers: https://developer.spotify.com/dashboard
+- Last.fm API : https://www.last.fm/api/account/create
 - Google API Console (YouTube): https://console.cloud.google.com/apis
 

@@ -111,6 +111,7 @@ function correctPlayerName() {
 
       <div class="lg:col-span-1 flex flex-col gap-4 order-2 lg:order-1">
         <h3 class="text-xs uppercase tracking-widest text-[#8A8585] font-bold">Joueurs</h3>
+        <p v-if="game.ownTrack" class="text-sm font-bold text-[var(--color-beige)]">C'est ta piste : les autres devinent.</p>
         <div class="grid grid-cols-2 gap-3">
           <button
               v-for="(player, i) in game.gamePlayers"
@@ -120,9 +121,10 @@ function correctPlayerName() {
               :visible="{ opacity: 1, scale: 1, transition: { delay: 100 + i * 70, type: 'spring' } }"
               type="button"
               class="p-4 border-2 rounded-xl font-bold text-center h-20 flex items-center justify-center transition-all cursor-pointer text-[var(--color-beige)] select-none"
+              :disabled="game.ownTrack"
               :class="game.answerResult?.correctPlayerId === player.id
               ? 'border-green-500 bg-green-500/10 text-green-400'
-              : 'border-[#333] hover:border-[var(--color-blue-main)] bg-black/20'"
+              : 'border-[#333] hover:border-[var(--color-blue-main)] bg-black/20 disabled:opacity-40 disabled:cursor-not-allowed'"
               @click="game.submitGuess(player.id)"
           >
             <span class="truncate">{{ player.name }}</span>

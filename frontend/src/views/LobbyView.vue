@@ -6,8 +6,8 @@ import CreateRoomModal from '@/components/CreateRoomModal.vue';
 const game = useGameStore();
 const showCreateModal = ref(false);
 
-function onCreate(name) {
-  game.createRoom(name);
+function onCreate(name, settings) {
+  game.createRoom(name, settings);
   showCreateModal.value = false;
 }
 </script>
@@ -181,7 +181,7 @@ function onCreate(name) {
           <span class="text-2xl">🎵</span>
           <h3 class="font-bold text-[var(--color-beige)]">Vos Propres Musiques</h3>
           <p class="text-[#8A8585] leading-relaxed">
-            Jouez avec vos morceaux favoris en connectant vos comptes Spotify, YouTube Music, Jellyfin ou Last.fm.
+            Jouez avec vos morceaux favoris en connectant Last.fm, YouTube Music ou Jellyfin, avec ou sans compte.
           </p>
         </div>
 

@@ -19,8 +19,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
-    # Joignable seulement via Caddy. Pour l'admin, publier sur une interface privée,
-    # ex. ports: ["127.0.0.1:8080:8080"] puis tunnel SSH.
+    # Joignable seulement via Caddy.
     expose:
       - "8080"
     depends_on:
@@ -33,7 +32,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    # FRONTEND_URL, CORS_ORIGIN, *_REDIRECT_URI et ADMIN_PASSWORD : dans .env (voir README).
+    # FRONTEND_URL, TOKEN_ENCRYPTION_KEY, GOOGLE_*, LASTFM_* : dans .env (voir README).
     env_file:
       - .env
     environment:
@@ -41,12 +40,17 @@ services:
       # Seul le sous-réseau Docker fixé plus bas est cru pour X-Forwarded-For (Caddy, nginx).
       # Pas « uniquelocal » : il inclut le LAN et fd7a:115c:a1e0::/48 (Tailscale), donc forgeable.
       TRUST_PROXY: "172.28.57.0/24" # scan:ok
+      # Comptes, sources liées et historique (SQLite) : à sauvegarder.
+      DATA_DIR: /data
+    volumes:
+      - tuneguess_data:/data
     expose:
       - "5000"
     networks:
       - tuneguess
 
 volumes:
+  tuneguess_data:
   caddy_data:
   caddy_config:
 

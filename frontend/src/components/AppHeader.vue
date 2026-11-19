@@ -1,6 +1,7 @@
 <script setup>
 import { useRoute } from 'vue-router';
 import logo from '@/assets/Logo.svg';
+import AccountMenu from '@/components/AccountMenu.vue';
 
 const route = useRoute();
 </script>
@@ -41,6 +42,7 @@ const route = useRoute();
       >
         Légal
       </RouterLink>
+      <AccountMenu />
     </nav>
   </header>
 </template>

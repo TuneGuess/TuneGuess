@@ -1,9 +1,8 @@
 http://tuneguess.app, http://tuneguess.raphthln.ovh {
 	encode gzip
 
-	@admin path /admin /admin/*
-	respond @admin "Forbidden" 403
-
+	# /admin est la page d'administration : l'API /api/admin/* exige un compte admin
+	# (passkey confirmée ou Tailscale validé), vérifié par le backend.
 	reverse_proxy /api/* backend:5000
 	reverse_proxy web:8080
 }

@@ -5,35 +5,36 @@
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 class="text-3xl font-semibold">Panneau Admin</h1>
-            <p class="text-slate-400">Authentification locale et modération des parties en direct.</p>
+            <p class="text-slate-400">Salons en direct, configuration, sécurité et utilisateurs.</p>
           </div>
-          <button v-if="authenticated" @click="logout" class="rounded-full border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-200 transition hover:bg-slate-700">
-            Se déconnecter
-          </button>
+          <p v-if="account.user" class="text-sm text-slate-400">{{ account.handle || account.user.displayName }}</p>
         </div>
       </div>
 
-      <div v-if="!authenticated" class="rounded-3xl border border-slate-700 bg-slate-900/80 p-6 shadow-2xl shadow-slate-950/20">
-        <h2 class="mb-4 text-xl font-semibold">Connexion admin</h2>
-        <p class="mb-6 text-slate-400">Cette page est protégée par un mot de passe local. Il n'y a pas de lien public vers cette interface.</p>
-        <form @submit.prevent="login" class="grid gap-4">
-          <label class="grid gap-2 text-sm text-slate-300">
-            Mot de passe admin
-            <input
-              v-model="password"
-              type="password"
-              class="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-500"
-              placeholder="Entrez le mot de passe"
-            />
-          </label>
-          <button type="submit" class="w-full rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">
-            Se connecter
-          </button>
-          <p v-if="error" class="text-sm text-rose-400">{{ error }}</p>
-        </form>
+      <div v-if="gate" class="rounded-3xl border border-slate-700 bg-slate-900/80 p-6 shadow-2xl shadow-slate-950/20">
+        <p class="mb-4 text-slate-300">{{ gate.message }}</p>
+        <RouterLink v-if="gate.link" :to="gate.link.to" class="inline-block rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">{{ gate.link.label }}</RouterLink>
+        <button v-if="gate.elevate" type="button" :disabled="loading" @click="elevate" class="rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50">
+          Confirmer avec ma passkey
+        </button>
+        <p v-if="error" class="mt-4 text-sm text-rose-400">{{ error }}</p>
       </div>
 
-      <div v-else>
+      <div v-else-if="account.loaded">
+        <nav aria-label="Sections de l'administration" class="mb-6 flex flex-wrap gap-2">
+          <button
+            v-for="tab in TABS" :key="tab.id" type="button" @click="activeTab = tab.id"
+            class="rounded-full border px-4 py-2 text-sm transition"
+            :class="activeTab === tab.id ? 'border-cyan-500 bg-cyan-500/10 text-white' : 'border-slate-700 bg-slate-900/80 text-slate-300 hover:border-cyan-500'"
+            :aria-current="activeTab === tab.id ? 'page' : undefined"
+          >
+            {{ tab.label }}
+          </button>
+        </nav>
+        <component :is="currentTab.component" v-if="currentTab.component" />
+      </div>
+
+      <div v-if="!gate && account.loaded && activeTab === 'salons'">
         <div class="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
           <section class="rounded-3xl border border-slate-700 bg-slate-900/80 p-6 shadow-2xl shadow-slate-950/20">
             <h2 class="mb-4 text-xl font-semibold">Statistiques globales</h2>
@@ -162,16 +163,53 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { fetchAdminRooms, fetchAdminRoom, renameAdminPlayer, kickAdminPlayer, deleteAdminRoom, isAdminAuthenticated, setAdminPassword, logoutAdmin } from '@/services/admin';
+import { ref, computed, onMounted } from 'vue';
+import { useAccountStore } from '@/stores/account';
+import { fetchAdminRooms, fetchAdminRoom, renameAdminPlayer, kickAdminPlayer, deleteAdminRoom } from '@/services/admin';
+import AdminConfiguration from '@/components/admin/AdminConfiguration.vue';
+import AdminSecurite from '@/components/admin/AdminSecurite.vue';
+import AdminUtilisateurs from '@/components/admin/AdminUtilisateurs.vue';
+import AdminJellyfin from '@/components/admin/AdminJellyfin.vue';
 
-const password = ref('');
-const authenticated = ref(isAdminAuthenticated());
+const TABS = [
+  { id: 'salons', label: 'Salons', component: null },
+  { id: 'configuration', label: 'Configuration', component: AdminConfiguration },
+  { id: 'securite', label: 'Sécurité', component: AdminSecurite },
+  { id: 'utilisateurs', label: 'Utilisateurs', component: AdminUtilisateurs },
+  { id: 'jellyfin', label: 'Jellyfin', component: AdminJellyfin },
+];
+
+const account = useAccountStore();
+const activeTab = ref('salons');
+const currentTab = computed(() => TABS.find((t) => t.id === activeTab.value));
 const rooms = ref([]);
 const selectedRoom = ref(null);
 const stats = ref({ roomCount: 0, playerCount: 0, playingCount: 0 });
 const error = ref('');
 const loading = ref(false);
+
+// Le serveur décide (requireAdmin) ; la page ne fait qu'expliquer l'étape manquante.
+const gate = computed(() => {
+  if (!account.loaded) return null;
+  if (!account.isLoggedIn) return { message: 'Connecte-toi avec un compte administrateur.', link: { to: '/connexion', label: 'Connexion' } };
+  if (!account.isAdmin) return { message: 'Réservé aux administrateurs.' };
+  if (account.adminAccess === 'bootstrap') return { message: "Termine l'amorçage : enregistre ta passkey.", link: { to: '/admin/amorcage', label: 'Amorçage' } };
+  if (account.user.needsUsername) return { message: "Choisis d'abord ton identifiant.", link: { to: '/compte/bienvenue', label: 'Choisir mon identifiant' } };
+  if (account.adminAccess === 'passkey_required') return { message: 'Confirme ton identité avec ta passkey (valable 12 h sur cette session), ou connecte-toi depuis Tailscale validé.', elevate: true };
+  return null;
+});
+
+async function elevate() {
+  loading.value = true;
+  try {
+    await account.elevate();
+    if (!gate.value) await loadRooms();
+  } catch (err) {
+    if (err?.name !== 'NotAllowedError') setError(err.message || 'Confirmation impossible.');
+  } finally {
+    loading.value = false;
+  }
+}
 
 const summarizeStats = (roomList) => {
   const activeRooms = roomList.length;
@@ -189,29 +227,6 @@ const setError = (message) => {
   }, 6000);
 };
 
-const login = async () => {
-  if (!password.value) {
-    setError('Mot de passe requis.');
-    return;
-  }
-
-  loading.value = true;
-  try {
-    setAdminPassword(password.value);
-    const roomList = await fetchAdminRooms();
-    authenticated.value = true;
-    rooms.value = roomList;
-    summarizeStats(roomList);
-    selectedRoom.value = null;
-  } catch (err) {
-    logoutAdmin();
-    setError(err.data?.error || 'Mot de passe invalide.');
-    authenticated.value = false;
-  } finally {
-    loading.value = false;
-  }
-};
-
 const loadRooms = async () => {
   loading.value = true;
   try {
@@ -223,7 +238,7 @@ const loadRooms = async () => {
       selectedRoom.value = updated;
     }
   } catch (err) {
-    setError(err.data?.error || 'Impossible de charger les rooms.');
+    setError(err.message || 'Impossible de charger les rooms.');
   } finally {
     loading.value = false;
   }
@@ -234,7 +249,7 @@ const selectRoom = async (roomId) => {
   try {
     selectedRoom.value = await fetchAdminRoom(roomId);
   } catch (err) {
-    setError(err.data?.error || 'Impossible de charger la room.');
+    setError(err.message || 'Impossible de charger la room.');
   } finally {
     loading.value = false;
   }
@@ -253,7 +268,7 @@ const promptRenamePlayer = async (playerId) => {
       selectedRoom.value = await fetchAdminRoom(selectedRoom.value.id);
     }
   } catch (err) {
-    setError(err.data?.error || 'Impossible de renommer le joueur.');
+    setError(err.message || 'Impossible de renommer le joueur.');
   } finally {
     loading.value = false;
   }
@@ -267,7 +282,7 @@ const kickPlayer = async (playerId) => {
     await loadRooms();
     selectedRoom.value = selectedRoom.value ? await fetchAdminRoom(selectedRoom.value.id) : null;
   } catch (err) {
-    setError(err.data?.error || 'Impossible d\'expulser le joueur.');
+    setError(err.message || 'Impossible d\'expulser le joueur.');
   } finally {
     loading.value = false;
   }
@@ -281,23 +296,14 @@ const deleteRoom = async (roomId) => {
     selectedRoom.value = null;
     await loadRooms();
   } catch (err) {
-    setError(err.data?.error || 'Impossible de supprimer la room.');
+    setError(err.message || 'Impossible de supprimer la room.');
   } finally {
     loading.value = false;
   }
 };
 
-const logout = () => {
-  logoutAdmin();
-  authenticated.value = false;
-  password.value = '';
-  rooms.value = [];
-  selectedRoom.value = null;
-};
-
-onMounted(() => {
-  if (authenticated.value) {
-    loadRooms();
-  }
+onMounted(async () => {
+  await account.ensureLoaded();
+  if (!gate.value) loadRooms();
 });
 </script>

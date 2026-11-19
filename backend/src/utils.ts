@@ -31,8 +31,8 @@ export function getRoomCodeFromId(roomId: string | undefined): string {
   return roomId.startsWith('room-') ? roomId.slice(5).toUpperCase() : roomId.toUpperCase();
 }
 
-// Hôtes d'images que le navigateur peut charger (pochettes Spotify, YouTube, Deezer) : https seulement.
-const IMAGE_HOSTS = ['scdn.co', 'ytimg.com', 'dzcdn.net'];
+// Hôtes d'images que le navigateur peut charger (pochettes YouTube, Deezer) : https seulement.
+const IMAGE_HOSTS = ['ytimg.com', 'dzcdn.net'];
 
 export function safeImageUrl(raw: unknown): string | undefined {
   if (typeof raw !== 'string' || raw.length > 2048) return undefined;

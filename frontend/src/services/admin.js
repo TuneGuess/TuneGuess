@@ -1,91 +1,12 @@
-import { API_BASE } from '@/config';
+import { api } from '@/services/account';
 
-// Même origine que le reste de l'app : nginx (ou Vite en dev) relaie /admin/ vers le backend.
-const BASE_URL = API_BASE;
-const STORAGE_KEY = 'tuneguess_admin_password';
+// Admin des salons : cookie de session d'un compte admin (passkey confirmée ou Tailscale validé).
+const salon = (roomId) => `/api/admin/salons/${encodeURIComponent(roomId)}`;
 
-function getStoredPassword() {
-  return sessionStorage.getItem(STORAGE_KEY) || '';
-}
-
-function setStoredPassword(password) {
-  sessionStorage.setItem(STORAGE_KEY, password);
-}
-
-function clearStoredPassword() {
-  sessionStorage.removeItem(STORAGE_KEY);
-}
-
-function getAuthHeaders() {
-  const password = getStoredPassword();
-  if (!password) return {};
-  return { Authorization: `Bearer ${password}` };
-}
-
-async function request(path, options = {}) {
-  const url = `${BASE_URL}${path}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-    ...getAuthHeaders(),
-  };
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    let payload;
-    try {
-      payload = JSON.parse(text);
-    } catch (err) {
-      payload = { error: text };
-    }
-    const error = new Error(payload?.error || response.statusText || 'Erreur réseau');
-    Object.assign(error, { status: response.status, data: payload });
-    throw error;
-  }
-
-  return response.json();
-}
-
-export function isAdminAuthenticated() {
-  return Boolean(getStoredPassword());
-}
-
-export function setAdminPassword(password) {
-  setStoredPassword(password);
-}
-
-export function logoutAdmin() {
-  clearStoredPassword();
-}
-
-export async function fetchAdminRooms() {
-  return request('/admin/rooms');
-}
-
-export async function fetchAdminRoom(roomId) {
-  return request(`/admin/rooms/${encodeURIComponent(roomId)}`);
-}
-
-export async function renameAdminPlayer(roomId, playerId, name) {
-  return request(`/admin/rooms/${encodeURIComponent(roomId)}/players/${encodeURIComponent(playerId)}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ name }),
-  });
-}
-
-export async function kickAdminPlayer(roomId, playerId) {
-  return request(`/admin/rooms/${encodeURIComponent(roomId)}/players/${encodeURIComponent(playerId)}/kick`, {
-    method: 'POST',
-  });
-}
-
-export async function deleteAdminRoom(roomId) {
-  return request(`/admin/rooms/${encodeURIComponent(roomId)}`, {
-    method: 'DELETE',
-  });
-}
+export const fetchAdminRooms = () => api('/api/admin/salons');
+export const fetchAdminRoom = (roomId) => api(salon(roomId));
+export const renameAdminPlayer = (roomId, playerId, name) =>
+  api(`${salon(roomId)}/players/${encodeURIComponent(playerId)}`, { method: 'PATCH', body: { name } });
+export const kickAdminPlayer = (roomId, playerId) =>
+  api(`${salon(roomId)}/players/${encodeURIComponent(playerId)}/kick`, { method: 'POST', body: {} });
+export const deleteAdminRoom = (roomId) => api(salon(roomId), { method: 'DELETE' });

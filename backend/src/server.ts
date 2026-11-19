@@ -14,11 +14,16 @@ import { Player } from './Player';
 import { parseTrackPayload, Room } from './Room';
 import { RoomManager } from './RoomManager';
 import { safeEqual, sanitizeInput } from './utils';
-import { isPrivateAddress } from './outbound';
-import { SpotifyProvider } from './SpotifyProvider';
 import { JellyfinProvider } from './JellyfinProvider';
 import { YouTubeProvider } from './YouTubeProvider';
 import { LastFmProvider } from './lastFmProvider';
+import { openDb } from './comptes/db';
+import { initEncryptionKey, randomToken, setEncryptionKeyForTests } from './comptes/secrets';
+import { ensureBootstrap } from './comptes/bootstrap';
+import { authFromCookie, createAccountRouter, getGameDefaults } from './comptes/routes';
+import { loadAccountTracks } from './comptes/sources';
+import { recordGame } from './comptes/history';
+import { sanitizeScoring, startBlocker } from './comptes/jeu';
 
 const app = express();
 // Aucune requête sortante sans délai : un fournisseur qui ne répond plus ne bloque pas le serveur.
@@ -64,6 +69,13 @@ function httpRateLimit(limit: number, windowMs: number) {
   };
 }
 
+// Comptes : base SQLite et clé des jetons dans DATA_DIR (« :memory: » pour les tests, rien sur disque).
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../data');
+if (DATA_DIR === ':memory:') setEncryptionKeyForTests(randomToken());
+else initEncryptionKey(DATA_DIR);
+const db = openDb(DATA_DIR === ':memory:' ? ':memory:' : path.join(DATA_DIR, 'tuneguess.db'));
+ensureBootstrap(db, { reset: process.env.ADMIN_BOOTSTRAP_RESET === '1' });
+
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_URL;
 const PORT = Number(process.env.PORT) || 5000;
@@ -79,6 +91,10 @@ app.use(express.json());
 const apiLimit = httpRateLimit(600, 60_000);
 app.use('/api/proxy', httpRateLimit(3000, 60_000));
 app.use(['/api', '/auth'], (req, res, next) => (req.originalUrl.startsWith('/api/proxy/') ? next() : apiLimit(req, res, next)));
+
+// Comptes (Google, passkeys, sources liées, historique, admin) : /api/... et /auth/compte/...
+const { router: accountRouter, requireAdmin } = createAccountRouter(db);
+app.use(accountRouter);
 
 // --- SEO ENDPOINTS ---
 app.get('/sitemap.xml', (req: Request, res: Response) => {
@@ -117,15 +133,14 @@ Allow: /
 Sitemap: ${FRONTEND_URL}/sitemap.xml`);
 });
 
-const spotifyProvider = new SpotifyProvider();
 const jellyfinProvider = new JellyfinProvider();
 const youtubeProvider = new YouTubeProvider();
 const lastFmProvider = new LastFmProvider();
 
-// --- SPOTIFY / YOUTUBE AUTHENTICATION ---
+// --- YOUTUBE (INVITÉ, SANS COMPTE) ---
 // `state` aléatoire gardé dans un cookie HttpOnly (anti-CSRF de connexion) ; le jeton
 // revient au front dans le fragment (#), jamais envoyé au serveur ni écrit dans les journaux.
-for (const [name, provider] of [['spotify', spotifyProvider], ['youtube', youtubeProvider]] as const) {
+for (const [name, provider] of [['youtube', youtubeProvider]] as const) {
   const stateCookie = `oauth_state_${name}`;
 
   app.get(`/auth/${name}/login`, (req: Request, res: Response) => {
@@ -201,13 +216,7 @@ function handleProviderError(res: Response, error: any, defaultMessage: string, 
   const status = upstreamStatus === 401 || upstreamStatus === 403 ? upstreamStatus : 502;
 
   let code = 'API_ERROR';
-  if (provider === 'spotify') {
-    if (status === 403) {
-      code = 'SPOTIFY_WHITELIST_ERROR';
-    } else if (status === 401) {
-      code = 'SPOTIFY_UNAUTHORIZED';
-    }
-  } else if (provider === 'youtube') {
+  if (provider === 'youtube') {
     if (status === 401 || status === 403) {
       code = 'YOUTUBE_UNAUTHORIZED';
     }
@@ -232,12 +241,16 @@ function bearerToken(req: Request): string {
 
 app.get('/api/tracks/top', async (req: Request, res: Response) => {
   const token = bearerToken(req);
-  const provider = (req.query.provider as string) || 'spotify';
+  const provider = req.query.provider as string;
   const serverUrl = req.query.serverUrl as string;
   const userId = req.query.userId as string;
 
   if (!token) {
     res.status(400).json({ error: "Token manquant" });
+    return;
+  }
+  if (!['jellyfin', 'youtube', 'lastfm'].includes(provider)) {
+    res.status(400).json({ error: "Fournisseur inconnu" });
     return;
   }
 
@@ -247,10 +260,8 @@ app.get('/api/tracks/top', async (req: Request, res: Response) => {
       tracks = await jellyfinProvider.getUserTopTracks(token, { serverUrl, userId });
     } else if (provider === 'youtube') {
       tracks = await youtubeProvider.getUserTopTracks(token);
-    } else if (provider === 'lastfm') {
-      tracks = await lastFmProvider.getUserTopTracks(token);
     } else {
-      tracks = await spotifyProvider.getUserTopTracks(token);
+      tracks = await lastFmProvider.getUserTopTracks(token);
     }
     res.json(tracks);
   } catch (error: any) {
@@ -261,12 +272,16 @@ app.get('/api/tracks/top', async (req: Request, res: Response) => {
 
 app.get('/api/tracks/recent', async (req: Request, res: Response) => {
   const token = bearerToken(req);
-  const provider = (req.query.provider as string) || 'spotify';
+  const provider = req.query.provider as string;
   const serverUrl = req.query.serverUrl as string;
   const userId = req.query.userId as string;
 
   if (!token) {
     res.status(400).json({ error: "Token manquant" });
+    return;
+  }
+  if (!['jellyfin', 'youtube', 'lastfm'].includes(provider)) {
+    res.status(400).json({ error: "Fournisseur inconnu" });
     return;
   }
 
@@ -276,10 +291,8 @@ app.get('/api/tracks/recent', async (req: Request, res: Response) => {
       tracks = await jellyfinProvider.getUserRecentTracks(token, { serverUrl, userId });
     } else if (provider === 'youtube') {
       tracks = await youtubeProvider.getUserRecentTracks(token);
-    } else if (provider === 'lastfm') {
-      tracks = await lastFmProvider.getUserRecentTracks(token);
     } else {
-      tracks = await spotifyProvider.getUserRecentTracks(token);
+      tracks = await lastFmProvider.getUserRecentTracks(token);
     }
     res.json(tracks);
   } catch (error: any) {
@@ -334,33 +347,17 @@ app.get('/api/proxy/jellyfin/:kind', async (req: Request, res: Response) => {
 });
 
 const server = http.createServer(app);
+// Le websocket ignore CORS : l'Origin est vérifiée à la poignée de main. Sans Origin (client hors
+// navigateur), pas de cookie de victime à réutiliser : accepté.
+const originAllowed = (origin: string | undefined) =>
+  !origin || corsOrigins.some((o) => (typeof o === 'string' ? o === origin : o.test(origin)));
+
 const io = new Server(server, {
+  allowRequest: (req, callback) => callback(null, originAllowed(req.headers.origin)),
   cors: { origin: corsOrigins }
 });
 
 const roomManager = new RoomManager();
-
-// Sans ADMIN_PASSWORD, l'admin est désactivé (le jeu, lui, continue de tourner).
-export function adminAuth(req: Request, res: Response, next: NextFunction) {
-  const password = process.env.ADMIN_PASSWORD;
-  if (!password) {
-    res.status(503).json({ error: 'Admin désactivé : ADMIN_PASSWORD non défini' });
-    return;
-  }
-
-  // IP du client (socket, ou X-Forwarded-For des seuls relais TRUST_PROXY ; jamais l'en-tête Host).
-  if (!isPrivateAddress(req.ip || '')) {
-    res.status(403).json({ error: 'Forbidden: Admin access is only allowed from local or Tailscale connections' });
-    return;
-  }
-
-  const token = bearerToken(req);
-  if (!token || !safeEqual(token, password)) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-  next();
-}
 
 function getRoomSummary(room: Room) {
   return {
@@ -380,14 +377,15 @@ function getRoomSummary(room: Room) {
   };
 }
 
-app.use('/admin', httpRateLimit(30, 60_000), adminAuth);
+// Salons en cours : réservé aux administrateurs (passkey confirmée ou Tailscale validé).
+app.use('/api/admin/salons', httpRateLimit(30, 60_000), requireAdmin);
 
-app.get('/admin/rooms', (req: Request, res: Response) => {
+app.get('/api/admin/salons', (req: Request, res: Response) => {
   const rooms = roomManager.getAllRooms().map(getRoomSummary);
   res.json(rooms);
 });
 
-app.get('/admin/rooms/:roomId', (req: Request, res: Response) => {
+app.get('/api/admin/salons/:roomId', (req: Request, res: Response) => {
   const roomId = req.params.roomId as string;
   const room = roomManager.getRoomById(roomId);
   if (!room) {
@@ -397,7 +395,7 @@ app.get('/admin/rooms/:roomId', (req: Request, res: Response) => {
   res.json(getRoomSummary(room));
 });
 
-app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response) => {
+app.patch('/api/admin/salons/:roomId/players/:playerId', (req: Request, res: Response) => {
   const roomId = req.params.roomId as string;
   const playerId = req.params.playerId as string;
   const room = roomManager.getRoomById(roomId);
@@ -420,7 +418,7 @@ app.patch('/admin/rooms/:roomId/players/:playerId', (req: Request, res: Response
   res.json(getRoomSummary(room));
 });
 
-app.post('/admin/rooms/:roomId/players/:playerId/kick', (req: Request, res: Response) => {
+app.post('/api/admin/salons/:roomId/players/:playerId/kick', (req: Request, res: Response) => {
   const roomId = req.params.roomId as string;
   const playerId = req.params.playerId as string;
   const room = roomManager.getRoomById(roomId);
@@ -458,7 +456,7 @@ app.post('/admin/rooms/:roomId/players/:playerId/kick', (req: Request, res: Resp
   res.json({ success: true });
 });
 
-app.delete('/admin/rooms/:roomId', (req: Request, res: Response) => {
+app.delete('/api/admin/salons/:roomId', (req: Request, res: Response) => {
   const roomId = req.params.roomId as string;
   const room = roomManager.getRoomById(roomId);
   if (!room) {
@@ -508,7 +506,7 @@ function leaveCurrentRoom(socket: Socket) {
 }
 
 // Événements qui créent un salon, stockent des données ou appellent Deezer.
-const COSTLY_EVENTS = new Set(['create_room', 'join_room', 'store_tracks', 'start_game', 'next_round']);
+const COSTLY_EVENTS = new Set(['create_room', 'join_room', 'store_tracks', 'store_account_tracks', 'start_game', 'next_round']);
 const allowSocketEvent = rateLimiter(30, 60_000);
 // Par IP : un client qui ouvre des dizaines de sockets ne multiplie pas ses salons.
 // 20 connexions laissent un salon complet (10 joueurs) derrière une même box, onglets en plus.
@@ -517,7 +515,7 @@ const connectionsPerIp = new Map<string, number>();
 const allowCreateRoom = rateLimiter(10, 60_000);
 
 function emitRoomPlayers(room: Room) {
-  io.to(room.id).emit('update_players', room.players);
+  io.to(room.id).emit('update_players', room.publicPlayers());
 }
 
 function emitRoundState(room: Room) {
@@ -542,8 +540,20 @@ function startRoundTimer(room: Room) {
 
 function endGame(room: Room) {
   io.to(room.id).emit('game_over', {
-    players: [...room.players].sort((a, b) => b.score - a.score),
+    players: room.publicPlayers().sort((a, b) => b.score - a.score),
   });
+  try {
+    recordGame(db, {
+      roomCode: room.code,
+      roomName: room.name,
+      startedAt: room.startedAt,
+      endedAt: Date.now(),
+      players: room.players.map((p) => ({ key: p.id, userId: p.userId, name: p.name, score: p.score })),
+      rounds: room.rounds,
+    });
+  } catch (err: any) {
+    console.error('Historique non enregistré:', err?.message);
+  }
   room.status = 'waiting';
   room.currentQuestion = null;
   room.resetForRound();
@@ -566,6 +576,7 @@ function startQuestion(room: Room, result: NonNullable<Awaited<ReturnType<Room['
   room.currentQuestion = result.selected;
   startRoundTimer(room);
   io.to(room.id).emit('new_question', result.questionData);
+  io.to(result.selected.playerId).emit('own_track');
   emitRoundState(room);
 }
 
@@ -603,6 +614,10 @@ io.use((socket, next) => {
   }
   connectionsPerIp.set(ip, count + 1);
   socket.data.ip = ip;
+  // Compte connecté (cookie de session, même origine) : seulement s'il a choisi son @identifiant.
+  const user = authFromCookie(db, socket.request.headers.cookie)?.user;
+  socket.data.userId = user?.username ? user.id : null;
+  socket.data.username = user?.username ?? null;
   socket.on('disconnect', () => {
     const left = (connectionsPerIp.get(ip) || 1) - 1;
     if (left > 0) connectionsPerIp.set(ip, left);
@@ -642,6 +657,9 @@ io.on('connection', (socket: Socket) => {
     let room: Room;
     try {
       room = roomManager.createRoom(safeRoomName, socket.id, safePlayerName);
+      room.settings = { ...getGameDefaults(db) };
+      room.players[0].userId = socket.data.userId;
+      room.players[0].username = socket.data.username;
     } catch (err: any) {
       socket.emit('room_error', { message: err.message });
       return;
@@ -680,7 +698,7 @@ io.on('connection', (socket: Socket) => {
     }
 
     try {
-      const newPlayer = new Player(socket.id, safePlayerName, 0, false);
+      const newPlayer = new Player(socket.id, safePlayerName, 0, false, socket.data.userId, socket.data.username);
       room.addPlayer(newPlayer); // refuse aussi le salon où l'on est déjà
       leaveCurrentRoom(socket);
 
@@ -705,9 +723,10 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('update_settings', (settings: any) => {
     const room = getSocketRoom(socket);
-    if (!room || room.creatorId !== socket.id) return;
+    if (!room || room.creatorId !== socket.id || room.status !== 'waiting') return;
 
     if (settings && typeof settings === 'object') {
+      Object.assign(room.settings, sanitizeScoring(settings, room.settings));
       if (typeof settings.maxRounds === 'number') {
         room.settings.maxRounds = Math.min(50, Math.max(1, Math.floor(settings.maxRounds)));
       }
@@ -728,24 +747,50 @@ io.on('connection', (socket: Socket) => {
       return;
     }
     room.storeTracks(socket.id, parsed.tracks, parsed.jellyfin);
+    emitRoomPlayers(room);
+  });
+
+  // Pistes des sources liées au compte, lues côté serveur (aucun jeton ne passe par le navigateur).
+  socket.on('store_account_tracks', async () => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    // Session relue : une déconnexion depuis un autre onglet compte tout de suite.
+    const user = authFromCookie(db, socket.request.headers.cookie)?.user;
+    if (!user?.username || user.id !== socket.data.userId) {
+      socket.emit('account_tracks', { ok: false, count: 0, errors: [], error: 'Connectez-vous pour utiliser les sources de votre compte.' });
+      return;
+    }
+    try {
+      const { tracks, jellyfin, errors } = await loadAccountTracks(db, user.id);
+      if (getSocketRoom(socket) !== room) return;
+      if (tracks.length > 0) room.storeTracks(socket.id, tracks, jellyfin);
+      socket.emit('account_tracks', { ok: tracks.length > 0, count: tracks.length, errors });
+      emitRoomPlayers(room);
+    } catch (err: any) {
+      console.error('Sources du compte:', err?.message);
+      socket.emit('account_tracks', { ok: false, count: 0, errors: [], error: 'Sources du compte indisponibles.' });
+    }
   });
 
   socket.on('start_game', async () => {
     const room = getSocketRoom(socket);
     if (!room) return;
     if (room.creatorId !== socket.id) return;
-    if (room.players.length < 2) return;
     if (room.status === 'playing' || room.advancing) return;
+    const blocker = startBlocker(room.readyCount());
+    if (blocker) {
+      socket.emit('room_error', { message: blocker });
+      return;
+    }
 
-    room.status = 'playing';
-    room.resetForRound();
-    room.currentRound = 0;
-    room.playedTrackIds = new Set<string>();
+    room.startGame(Date.now());
     room.clearInactivityTimer();
+    emitRoomPlayers(room);
     broadcastActiveRooms();
 
     const result = await selectNextQuestionLocked(room);
-    if (room.status !== 'playing') return;
+    // Le salon a pu être fermé ou remis en attente pendant la recherche Deezer.
+    if ((room.status as Room['status']) !== 'playing') return;
     if (!result) {
       room.status = 'waiting';
       startInactivityTimer(room);
@@ -820,4 +865,4 @@ if (require.main === module) {
   });
 }
 
-export { app, server, io, roomManager };
+export { app, server, io, roomManager, db };

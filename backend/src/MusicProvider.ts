@@ -1,6 +1,6 @@
 export interface GenericTrack {
   id: string;
-  provider: 'lastfm' | 'spotify' | 'deezer' | 'apple-music' | 'jellyfin' | 'youtube';
+  provider: 'lastfm' | 'deezer' | 'apple-music' | 'jellyfin' | 'youtube';
   name: string;
   artists: string;
   albumName?: string;

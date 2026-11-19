@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test \"test/**/*.test.js\"",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
     "@vueuse/motion": "^3.0.3",
     "pinia": "^3.0.2",
     "socket.io-client": "^4.8.3",

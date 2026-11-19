@@ -5,7 +5,7 @@ import { AddressInfo } from 'net';
 import { isForbiddenTarget, normalizeServerUrl, outbound } from '../src/outbound';
 import { parseTrackPayload } from '../src/Room';
 
-const track = { id: 'abc-1', provider: 'spotify', name: 'Titre', artists: 'Artiste' };
+const track = { id: 'abc-1', provider: 'deezer', name: 'Titre', artists: 'Artiste' };
 
 test('store_tracks : schéma strict', () => {
   assert.equal(parseTrackPayload('nope'), null);
@@ -23,10 +23,10 @@ test('store_tracks : schéma strict', () => {
 
   // Images : https et hôtes de pochettes connus seulement ; id Deezer numérique.
   const img = (imageUrl: string) => parseTrackPayload({ tracks: [{ ...track, imageUrl }] })?.tracks[0].imageUrl;
-  assert.equal(img('https://i.scdn.co/image/ab67'), 'https://i.scdn.co/image/ab67');
+  assert.equal(img('https://i.ytimg.com/vi/ab67'), 'https://i.ytimg.com/vi/ab67');
   assert.equal(img('https://i.ytimg.com/vi/x/hq.jpg'), 'https://i.ytimg.com/vi/x/hq.jpg');
   assert.equal(img('https://e-cdns-images.dzcdn.net/c.jpg'), 'https://e-cdns-images.dzcdn.net/c.jpg');
-  for (const bad of ['http://i.scdn.co/a', 'https://evilscdn.co/a', 'https://scdn.co/a','https://scdn.co.evil.com/a', 'https://u:p@i.scdn.co/a', 'javascript:alert(1)']) { // identifiants dans l'URL (scan:ok)
+  for (const bad of ['http://i.ytimg.com/a', 'https://evilytimg.com/a', 'https://ytimg.com/a', 'https://ytimg.com.evil.com/a', 'https://u:p@i.ytimg.com/a', 'javascript:alert(1)']) { // identifiants dans l'URL (scan:ok)
     assert.equal(img(bad), undefined, bad);
   }
   assert.equal(parseTrackPayload({ tracks: [{ ...track, deezerId: '3135556' }] })?.tracks[0].deezerId, '3135556');

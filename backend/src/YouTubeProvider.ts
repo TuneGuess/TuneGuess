@@ -5,11 +5,8 @@ import { MusicProvider, GenericTrack } from './MusicProvider';
 export class YouTubeProvider implements MusicProvider {
   private clientId = process.env.GOOGLE_CLIENT_ID;
   private clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  private redirectUri = process.env.GOOGLE_REDIRECT_URI || 
-    (process.env.REDIRECT_URI 
-      ? process.env.REDIRECT_URI.replace('/auth/spotify/callback', '/auth/youtube/callback')
-      // Même origine que le front (Vite relaie /auth) : le cookie d'état posé au départ revient au retour.
-      : `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/youtube/callback`);
+  // Même origine que le front (Vite relaie /auth) : le cookie d'état posé au départ revient au retour.
+  private redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/youtube/callback`;
 
 
   public getAuthorizationUrl(state: string): string {

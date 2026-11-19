@@ -2,6 +2,8 @@
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGameStore } from '@/stores/game';
+import { useAccountStore } from '@/stores/account';
+import BaremeApercu from '@/components/BaremeApercu.vue';
 
 const props = defineProps({
   code: { type: String, default: '' },
@@ -10,14 +12,19 @@ const props = defineProps({
 const router = useRouter();
 const game = useGameStore();
 
-const activeProviderTab = ref('spotify');
+const account = useAccountStore();
+// Compte connecté avec identifiant : ses sources liées d'abord ; sinon Last.fm, la source principale.
+const activeProviderTab = ref('lastfm');
 const jellyfinUrlInput = ref(game.jellyfinServerUrl || '');
 const lastfmUsernameInput = ref(game.lastfmUsername || '');
 
-onMounted(() => {
+onMounted(async () => {
   if (!game.roomCode && props.code) {
     router.replace({ name: 'lobby', query: { room: props.code } });
+    return;
   }
+  await account.ensureLoaded();
+  if (account.user?.username) activeProviderTab.value = 'compte';
 });
 </script>
 
@@ -103,6 +110,56 @@ onMounted(() => {
               @change="game.updateSettings({ roundDuration: Number($event.target.value) })"
           />
         </label>
+        <label class="flex flex-col gap-2 text-xs uppercase tracking-wider text-[#8A8585] font-bold">
+          Points max
+          <input
+              type="number"
+              min="10"
+              max="10000"
+              :disabled="!game.isHost"
+              :value="game.settings.pointsMax"
+              class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-3 rounded-xl outline-none text-base font-bold text-[var(--color-beige)] text-center transition-colors disabled:opacity-40"
+              @change="game.updateSettings({ pointsMax: Number($event.target.value) })"
+          />
+        </label>
+        <label class="flex flex-col gap-2 text-xs uppercase tracking-wider text-[#8A8585] font-bold">
+          Points min (fin du chrono)
+          <input
+              type="number"
+              min="0"
+              max="10000"
+              :disabled="!game.isHost"
+              :value="game.settings.pointsMin"
+              class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-3 rounded-xl outline-none text-base font-bold text-[var(--color-beige)] text-center transition-colors disabled:opacity-40"
+              @change="game.updateSettings({ pointsMin: Number($event.target.value) })"
+          />
+        </label>
+        <label class="flex flex-col gap-2 text-xs uppercase tracking-wider text-[#8A8585] font-bold">
+          Délai de grâce (s)
+          <input
+              type="number"
+              min="0"
+              max="30"
+              step="0.5"
+              :disabled="!game.isHost"
+              :value="game.settings.delaiGrace"
+              class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-3 rounded-xl outline-none text-base font-bold text-[var(--color-beige)] text-center transition-colors disabled:opacity-40"
+              @change="game.updateSettings({ delaiGrace: Number($event.target.value) })"
+          />
+        </label>
+        <label class="flex items-center gap-3 text-xs uppercase tracking-wider text-[#8A8585] font-bold">
+          <input
+              type="checkbox"
+              :disabled="!game.isHost"
+              :checked="game.settings.bonusPremier"
+              class="w-5 h-5 accent-[var(--color-blue-main)] disabled:opacity-40"
+              @change="game.updateSettings({ bonusPremier: $event.target.checked })"
+          />
+          Bonus au premier (+20 %)
+        </label>
+      </div>
+      <div class="mt-5 text-[var(--color-beige)]">
+        <BaremeApercu :scoring="game.settings" :duration="game.settings.roundDuration" />
       </div>
     </div>
 
@@ -121,10 +178,17 @@ onMounted(() => {
               v-motion
               :initial="{ opacity: 0, scale: 0.8 }"
               :visible="{ opacity: 1, scale: 1, transition: { delay: i * 60, type: 'spring' } }"
-              class="p-4 border-2 border-[#333] rounded-xl font-bold text-center flex items-center justify-center gap-2 hover:border-[var(--color-blue-main)] transition-colors h-16 text-[var(--color-beige)] bg-black/20"
+              class="p-3 border-2 border-[#333] rounded-xl font-bold text-center flex items-center justify-center gap-2 hover:border-[var(--color-blue-main)] transition-colors min-h-16 text-[var(--color-beige)] bg-black/20"
           >
-            <span class="truncate">{{ p.name }}</span>
+            <span class="flex flex-col min-w-0 leading-tight">
+              <span class="truncate">{{ p.name }}</span>
+              <span v-if="p.username" class="truncate text-xs font-semibold text-[#8A8585]">@{{ p.username }}</span>
+            </span>
             <span v-if="p.isHost" class="text-sm" title="Hôte">👑</span>
+            <span
+                class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0"
+                :class="p.ready ? 'bg-green-950/40 text-green-500' : 'bg-black/30 text-[#8A8585]'"
+            >{{ p.ready ? 'Prêt' : 'Sans source' }}</span>
           </div>
         </template>
         <p v-else class="col-span-full text-[#8A8585] text-sm flex items-center justify-center gap-3 py-4">
@@ -153,13 +217,7 @@ onMounted(() => {
             </h4>
 
             <div v-if="typeof game.roomError === 'object'" class="mt-2 text-xs text-[#8A8585] space-y-2 leading-relaxed">
-              <p v-if="game.roomError.code === 'SPOTIFY_WHITELIST_ERROR'">
-                <strong>Compte non autorisé (mode développement) :</strong> L'application TuneGuess utilise l'API Spotify en mode de développement restreint. L'administrateur doit ajouter votre e-mail de compte Spotify dans son dashboard développeur. Vous pouvez également basculer sur Jellyfin ou Last.fm.
-              </p>
-              <p v-else-if="game.roomError.code === 'SPOTIFY_UNAUTHORIZED'">
-                <strong>Session expirée :</strong> Votre session de connexion Spotify n'est plus valide. Essayez de vous reconnecter.
-              </p>
-              <p v-else-if="game.roomError.code === 'JELLYFIN_UNAUTHORIZED'">
+              <p v-if="game.roomError.code === 'JELLYFIN_UNAUTHORIZED'">
                 <strong>Connexion rejetée :</strong> L'authentification a échoué sur Jellyfin. Vérifiez vos identifiants ou relancez la connexion.
               </p>
               <p v-else-if="game.roomError.code === 'JELLYFIN_CONNECTION_ERROR'">
@@ -193,12 +251,13 @@ onMounted(() => {
       <div v-if="!game.linkedProvider" class="flex flex-col items-center gap-4 mb-6 w-full">
         <div class="flex bg-black/40 p-1 rounded-full border-2 border-[#333] w-full max-w-md relative">
           <button
+              v-if="account.user?.username"
               type="button"
               class="flex-1 py-2 rounded-full font-bold text-sm cursor-pointer z-10 transition-all"
-              :class="activeProviderTab === 'spotify' ? 'bg-[var(--color-blue-main)] text-white' : 'text-[#8A8585] hover:text-[var(--color-beige)]'"
-              @click="activeProviderTab = 'spotify'"
+              :class="activeProviderTab === 'compte' ? 'bg-[var(--color-blue-main)] text-white' : 'text-[#8A8585] hover:text-[var(--color-beige)]'"
+              @click="activeProviderTab = 'compte'"
           >
-            Spotify
+            Mon compte
           </button>
           <button
               type="button"
@@ -228,15 +287,18 @@ onMounted(() => {
       </div>
 
       <div v-if="!game.linkedProvider" class="flex flex-col items-center gap-4 mb-6 w-full">
-        <template v-if="activeProviderTab === 'spotify'">
+        <template v-if="activeProviderTab === 'compte'">
           <button
               type="button"
-              disabled
-              class="w-full sm:w-auto bg-[#1DB954] text-black px-8 py-3 rounded-full font-black hover:brightness-110 transition cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="game.spotifyLogin()"
+              :disabled="game.accountLoading"
+              class="w-full sm:w-auto btn-primary px-8 py-3 rounded-full font-black transition cursor-pointer text-sm disabled:opacity-50"
+              @click="game.useAccountTracks()"
           >
-            Connecter Spotify
+            {{ game.accountLoading ? 'Chargement des sources…' : 'Utiliser les sources de mon compte' }}
           </button>
+          <RouterLink to="/compte/connexions" class="text-xs text-[#8A8585] hover:text-[var(--color-beige)] underline">
+            Gérer mes sources (Last.fm, YouTube, Jellyfin)
+          </RouterLink>
         </template>
 
         <template v-else-if="activeProviderTab === 'youtube'">
@@ -330,14 +392,14 @@ onMounted(() => {
         >
           <span class="w-2 h-2 rounded-full bg-green-500" />
           <span>
-            <template v-if="game.linkedProvider === 'spotify' && game.spotifyProfileName">
-              Connecté sur Spotify en tant que {{ game.spotifyProfileName }}
+            <template v-if="game.linkedProvider === 'compte'">
+              Sources du compte : {{ game.accountTracksCount }} morceaux
             </template>
             <template v-else-if="game.linkedProvider === 'lastfm'">
               Last.fm connecté ({{ game.lastfmUsername }})
             </template>
             <template v-else>
-              {{ game.linkedProvider === 'spotify' ? 'Spotify' : game.linkedProvider === 'youtube' ? 'YouTube' : game.linkedProvider === 'jellyfin' ? 'Jellyfin' : 'Last.fm' }} connecté
+              {{ game.linkedProvider === 'youtube' ? 'YouTube' : 'Jellyfin' }} connecté
             </template>
           </span>
         </p>
@@ -371,14 +433,14 @@ onMounted(() => {
             type="button"
             :disabled="!game.canLaunch"
             class="btn-primary px-12 py-4 rounded-full font-black text-xl cursor-pointer w-full sm:w-auto disabled:opacity-40"
-            :title="!game.canLaunch ? 'Il faut au moins 2 joueurs' : ''"
+            :title="!game.canLaunch ? 'Il faut au moins 2 joueurs prêts' : ''"
             @click="game.startGame()"
         >
           ▶ Lancer la party
         </button>
 
         <p v-if="!game.canLaunch && game.isHost" class="text-xs text-[#8A8585] font-semibold mt-3">
-          Minimum 2 joueurs pour lancer
+          {{ game.readyCount }} joueur{{ game.readyCount > 1 ? 's' : '' }} prêt{{ game.readyCount > 1 ? 's' : '' }} : il en faut au moins 2 (avec des morceaux) pour lancer
         </p>
 
         <button

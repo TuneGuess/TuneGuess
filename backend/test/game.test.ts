@@ -36,7 +36,7 @@ after(() => {
 const connect = () => Client.connect(url);
 
 const tracks = (prefix: string) =>
-  Array.from({ length: 3 }, (_, i) => ({ id: `${prefix}${i}`, provider: 'spotify', name: `Titre ${i}`, artists: 'Artiste', previewUrl: 'http://169.254.169.254/' }));
+  Array.from({ length: 3 }, (_, i) => ({ id: `${prefix}${i}`, provider: 'deezer', name: `Titre ${i}`, artists: 'Artiste', previewUrl: 'http://169.254.169.254/' }));
 
 async function roomWithTwoPlayers() {
   const host = await connect();
@@ -66,7 +66,7 @@ test('store_tracks invalide refusé, URL du client ignorée', async () => {
 
 test('id Deezer (Last.fm) : extrait par api.deezer.com/track/{id}, pochette du client gardée', async () => {
   const { host, guest } = await roomWithTwoPlayers();
-  const cover = 'https://i.scdn.co/image/pochette';
+  const cover = 'https://i.ytimg.com/vi/pochette';
   const withId = (p: string) => tracks(p).map((t) => ({ ...t, provider: 'lastfm', deezerId: '42', imageUrl: cover }));
   host.emit('store_tracks', { tracks: withId('c') });
   guest.emit('store_tracks', { tracks: withId('d') });
@@ -81,12 +81,13 @@ test('id Deezer (Last.fm) : extrait par api.deezer.com/track/{id}, pochette du c
 test('points calculés par le serveur, réponse tardive refusée', () => {
   const room = new Room('room-test', 'Test', 'p1');
   room.players.push({ id: 'p1', name: 'A', score: 0, isHost: true } as any);
-  room.currentQuestion = { track: { id: 't', provider: 'spotify', name: 'n', artists: 'a' }, playerId: 'p2', mediaKey: null };
+  room.currentQuestion = { track: { id: 't', provider: 'deezer', name: 'n', artists: 'a' }, playerId: 'p2', mediaKey: null };
   room.roundStartedAtMs = 1000;
   room.roundEndsAtMs = 11000;
   assert.throws(() => room.submitAnswer('p1', 'p2', 11000), /Manche terminée/);
-  assert.deepEqual(room.submitAnswer('p1', 'p2', 1300), { correct: true, correctPlayerId: 'p2' });
-  assert.equal(room.players[0].score, 700);
+  // 300 ms : dans le délai de grâce (1 s) → 1000 points, +20 % pour la première bonne réponse.
+  assert.deepEqual(room.submitAnswer('p1', 'p2', 1300), { correct: true, correctPlayerId: 'p2', points: 1200 });
+  assert.equal(room.players[0].score, 1200);
   assert.throws(() => room.submitAnswer('p1', 'p2', 1400), /invalide/, 'une seule réponse par manche');
 });
 
@@ -100,11 +101,16 @@ test('réponse : points envoyés par le client ignorés ; double next_round = un
   await guest.next('new_question');
 
   const answer = room.currentQuestion!.playerId;
-  host.emit('answer', { playerId: answer, points: 999999 });
-  guest.emit('answer', { playerId: answer, points: 999999 });
-  await host.next('answer_result');
-  await guest.next('answer_result');
-  for (const p of room.players) assert.ok(p.score >= 100 && p.score <= 1000, `score ${p.score}`);
+  // Le propriétaire de la piste ne répond pas : seul l'autre joueur devine.
+  const [owner, guesser] = answer === host.id ? [host, guest] : [guest, host];
+  owner.emit('answer', { playerId: answer, points: 999999 });
+  guesser.emit('answer', { playerId: answer, points: 999999 });
+  await guesser.next('answer_result');
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(owner.count('answer_result'), 0, 'réponse du propriétaire refusée');
+  const scoreOf = (c: typeof host) => room.players.find((p) => p.id === c.id)!.score;
+  assert.ok(scoreOf(guesser) >= 100 && scoreOf(guesser) <= 1200, `score ${scoreOf(guesser)}`);
+  assert.equal(scoreOf(owner), 0);
 
   host.emit('next_round');
   host.emit('next_round');
@@ -117,7 +123,9 @@ test('réponse : points envoyés par le client ignorés ; double next_round = un
 
 test('plus de morceaux : la partie se termine', async () => {
   const { host, guest, room } = await roomWithTwoPlayers();
+  // Même morceau des deux côtés : une fois joué, plus rien d'inédit.
   host.emit('store_tracks', { tracks: tracks('e').slice(0, 1) });
+  guest.emit('store_tracks', { tracks: tracks('e').slice(0, 1) });
   await new Promise((r) => setTimeout(r, 50));
   host.emit('start_game');
   await host.next('new_question');

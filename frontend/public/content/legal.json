@@ -22,8 +22,9 @@
       "id": "confidentialite",
       "title": "Données personnelles & Règles de confidentialité",
       "paragraphs": [
-        "TuneGuess collecte uniquement les données nécessaires au fonctionnement du jeu (pseudo, scores en session). Aucune donnée n'est vendue à des tiers.",
-        "Les connexions Spotify, YouTube Music ou Jellyfin sont gérées via OAuth / QuickConnect ; les jetons restent côté serveur de jeu et ne sont pas exposés aux autres joueurs.",
+        "TuneGuess collecte uniquement les données nécessaires au fonctionnement du jeu : pseudo et scores en session. Avec un compte (connexion Google ou passkey), s'y ajoutent le nom, l'adresse e-mail et l'avatar fournis par Google, l'identifiant choisi, les sources musicales liées et l'historique des parties. Aucune donnée n'est vendue à des tiers.",
+        "Les connexions Last.fm, YouTube Music ou Jellyfin passent par OAuth / QuickConnect ; les jetons sont chiffrés sur le serveur de jeu et ne sont jamais exposés aux autres joueurs.",
+        "Vous pouvez supprimer votre compte et son historique depuis Mon compte → Sécurité.",
         "Pour exercer vos droits (accès, rectification, suppression), contactez : contact@tuneguess.app."
       ]
     },
@@ -51,7 +52,7 @@
       "id": "propriete",
       "title": "Propriété intellectuelle",
       "paragraphs": [
-        "Les extraits musicaux, pochettes et métadonnées appartiennent à leurs ayants droit (Spotify, Jellyfin, labels, artistes). TuneGuess ne revendique aucun droit sur ces contenus.",
+        "Les extraits musicaux, pochettes et métadonnées appartiennent à leurs ayants droit (Deezer, Last.fm, YouTube, Jellyfin, labels, artistes). TuneGuess ne revendique aucun droit sur ces contenus.",
         "Le code et l'identité visuelle de TuneGuess restent la propriété de leurs auteurs, sauf mention contraire."
       ]
     },
@@ -59,7 +60,7 @@
       "id": "responsabilite",
       "title": "Limitation de responsabilité",
       "paragraphs": [
-        "TuneGuess est fourni « en l'état », sans garantie de disponibilité continue. L'éditeur ne saurait être tenu responsable des interruptions liées aux API tierces (Spotify, Jellyfin)."
+        "TuneGuess est fourni « en l'état », sans garantie de disponibilité continue. L'éditeur ne saurait être tenu responsable des interruptions liées aux API tierces (Deezer, Last.fm, YouTube, Jellyfin, Google)."
       ]
     }
   ],

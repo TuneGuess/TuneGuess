@@ -1,9 +1,13 @@
 // Test de fumée : démarre le backend CONSTRUIT (dist/server.js) avec des variables factices,
-// puis vérifie robots.txt, le refus de l'admin sans mot de passe et la création d'un salon par socket.io.
+// puis vérifie robots.txt, le refus de l'admin sans session de compte et la création d'un salon par socket.io.
 // Usage : npm run build && node scripts/smoke.mjs   (aucune dépendance : fetch et WebSocket natifs de Node 22)
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+const dataDir = mkdtempSync(join(tmpdir(), 'tuneguess-smoke-')); // base SQLite jetable
 const PORT = process.env.SMOKE_PORT || '5055';
 const base = `http://127.0.0.1:${PORT}`;
 const server = spawn(process.execPath, ['dist/server.js'], {
@@ -12,7 +16,8 @@ const server = spawn(process.execPath, ['dist/server.js'], {
     PORT,
     NODE_ENV: 'production',
     FRONTEND_URL: 'http://localhost:8080',
-    ADMIN_PASSWORD: 'mot-de-passe-factice-de-ci', // scan:ok valeur factice de test
+    DATA_DIR: dataDir,
+    TOKEN_ENCRYPTION_KEY: '0'.repeat(64), // scan:ok valeur factice de test (clé de chiffrement exigée en production)
     SPOTIFY_CLIENT_ID: 'factice',
     SPOTIFY_CLIENT_SECRET: 'factice',
   },
@@ -54,9 +59,9 @@ try {
   assert.equal(robots.status, 200, 'GET /robots.txt');
   console.log('OK  /robots.txt -> 200');
 
-  const admin = await fetch(`${base}/admin/rooms`);
-  assert.equal(admin.status, 401, 'GET /admin/rooms sans mot de passe');
-  console.log('OK  /admin/rooms sans mot de passe -> 401');
+  const admin = await fetch(`${base}/api/admin/salons`);
+  assert.equal(admin.status, 401, 'GET /api/admin/salons sans session');
+  console.log('OK  /api/admin/salons sans session -> 401');
 
   const room = await createRoom();
   assert.ok(room.code && room.isHost, `room_joined inattendu : ${JSON.stringify(room)}`);
@@ -67,4 +72,5 @@ try {
 } finally {
   clearTimeout(timer);
   stop();
+  try { rmSync(dataDir, { recursive: true, force: true }); } catch { /* Windows : base encore verrouillée à l'arrêt du serveur */ }
 }

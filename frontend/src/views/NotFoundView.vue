@@ -12,7 +12,7 @@ const excuses = [
 
 const fakePlayers = [
   'Le serveur',
-  'Un bot Spotify',
+  'Un bot Last.fm',
   'Ta connexion Wi-Fi',
   'Personne (c’était évident)',
 ];

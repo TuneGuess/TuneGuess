@@ -1,0 +1,39 @@
+{
+  "title": "Relie ta plateforme à Last.fm",
+  "intro": "TuneGuess lit tes écoutes sur Last.fm. Une fois ta plateforme reliée à Last.fm (on parle de « scrobbling »), tes morceaux arrivent tout seuls dans tes parties.",
+  "note": "Seules les écoutes faites après l'activation sont prises en compte : écoute quelques morceaux avant ta première partie.",
+  "platforms": [
+    {
+      "name": "Spotify",
+      "steps": [
+        "Connecte-toi sur last.fm, ouvre Paramètres puis Applications.",
+        "Dans la ligne Spotify, clique sur Connecter et accepte sur la page Spotify."
+      ],
+      "link": { "label": "Paramètres Last.fm → Applications", "url": "https://www.last.fm/settings/applications" }
+    },
+    {
+      "name": "Deezer",
+      "steps": [
+        "Deezer propose le scrobbling nativement : dans les paramètres de ton compte Deezer, ouvre la rubrique des applications connectées.",
+        "Active Last.fm et connecte-toi avec ton compte Last.fm."
+      ],
+      "link": { "label": "Plateformes compatibles Last.fm", "url": "https://www.last.fm/about/trackmymusic" }
+    },
+    {
+      "name": "YouTube Music et autres sites",
+      "steps": [
+        "Installe l'extension Web Scrobbler dans ton navigateur (Chrome, Firefox, Edge, Safari).",
+        "Dans ses options, connecte ton compte Last.fm : tes écoutes sur YouTube Music, SoundCloud, Bandcamp… sont alors envoyées à Last.fm."
+      ],
+      "link": { "label": "Web Scrobbler", "url": "https://web-scrobbler.com/" }
+    },
+    {
+      "name": "Apple Music",
+      "steps": [
+        "Apple Music ne scrobble pas tout seul : il faut une application tierce (sur Mac ou iPhone) qui envoie tes écoutes à Last.fm.",
+        "Choisis-en une dans la liste des applications compatibles, puis connecte-la à ton compte Last.fm."
+      ],
+      "link": { "label": "Applications compatibles Last.fm", "url": "https://www.last.fm/about/trackmymusic" }
+    }
+  ]
+}

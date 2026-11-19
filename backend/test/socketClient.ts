@@ -8,10 +8,13 @@ export class Client {
   private waiters: (() => void)[] = [];
   constructor(public ws: WebSocket) {}
 
-  static async connect(url: string): Promise<Client> {
-    const client = new Client(new WebSocket(url));
+  // headers : cookie de session (WebSocket de Node/undici accepte des en-têtes, pas le navigateur).
+  static async connect(url: string, headers?: Record<string, string>): Promise<Client> {
+    const client = new Client(new WebSocket(url, headers ? ({ headers } as any) : undefined));
     clients.push(client);
     await new Promise<void>((resolve, reject) => {
+      // Poignée de main refusée (Origin, limite) : erreur au lieu d'une attente sans fin.
+      client.ws.onerror = () => reject(new Error('connexion refusée'));
       client.ws.onmessage = ({ data }) => {
         const msg = String(data);
         if (msg.startsWith('44')) reject(new Error(JSON.parse(msg.slice(2)).message));

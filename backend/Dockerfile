@@ -20,12 +20,14 @@ RUN npm ci --omit=dev \
        /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 
 COPY --from=builder /app/dist ./dist
+# DATA_DIR du compose : un volume nommé vide reprend le propriétaire de ce dossier
+RUN mkdir -p /data && chown node:node /data
 
 ENV NODE_ENV=production
 ENV PORT=5000
 
 EXPOSE 5000
 
-USER node
+USER 1000:1000
 
 CMD ["node", "dist/server.js"]

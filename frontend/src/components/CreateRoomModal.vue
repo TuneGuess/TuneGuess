@@ -1,6 +1,9 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { MAX_NAME_LENGTH } from '@/utils/sanitize';
+import { DEFAULT_SCORING } from '@/utils/bareme';
+import { useAccountStore } from '@/stores/account';
+import BaremeApercu from '@/components/BaremeApercu.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -8,15 +11,25 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'create']);
 
+const account = useAccountStore();
 const roomName = ref('');
+// Valeurs par défaut du serveur (réglées par l'admin), sinon celles du jeu.
+const defaults = () => ({ maxRounds: 10, roundDuration: 30, ...DEFAULT_SCORING, ...(account.providers.gameDefaults || {}) });
+const settings = ref(defaults());
+const showScoring = ref(false);
 
-watch(() => props.open, (isOpen) => {
-  if (!isOpen) roomName.value = '';
+watch(() => props.open, async (isOpen) => {
+  if (!isOpen) {
+    roomName.value = '';
+    return;
+  }
+  await account.ensureLoaded();
+  settings.value = defaults();
 });
 
 function submit() {
   if (!roomName.value.trim()) return;
-  emit('create', roomName.value);
+  emit('create', roomName.value, { ...settings.value });
   roomName.value = '';
 }
 </script>
@@ -53,6 +66,40 @@ function submit() {
                 class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-4 rounded-xl text-center outline-none text-lg text-[var(--color-beige)] placeholder-[#555] transition-colors"
                 @keyup.enter="submit"
             />
+
+            <button
+                type="button"
+                class="text-xs text-[#8A8585] hover:text-[var(--color-beige)] underline cursor-pointer self-center"
+                :aria-expanded="showScoring"
+                @click="showScoring = !showScoring"
+            >
+              {{ showScoring ? 'Masquer les réglages' : 'Manches, durée et barème' }}
+            </button>
+
+            <div v-if="showScoring" class="grid grid-cols-2 gap-3 text-xs uppercase tracking-wider text-[#8A8585] font-bold">
+              <label class="flex flex-col gap-1">Manches
+                <input v-model.number="settings.maxRounds" type="number" min="1" max="50" class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-2 rounded-xl text-center outline-none text-sm font-bold text-[var(--color-beige)] transition-colors" />
+              </label>
+              <label class="flex flex-col gap-1">Durée (s)
+                <input v-model.number="settings.roundDuration" type="number" min="10" max="120" class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-2 rounded-xl text-center outline-none text-sm font-bold text-[var(--color-beige)] transition-colors" />
+              </label>
+              <label class="flex flex-col gap-1">Points max
+                <input v-model.number="settings.pointsMax" type="number" min="10" max="10000" class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-2 rounded-xl text-center outline-none text-sm font-bold text-[var(--color-beige)] transition-colors" />
+              </label>
+              <label class="flex flex-col gap-1">Points min
+                <input v-model.number="settings.pointsMin" type="number" min="0" max="10000" class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-2 rounded-xl text-center outline-none text-sm font-bold text-[var(--color-beige)] transition-colors" />
+              </label>
+              <label class="flex flex-col gap-1">Délai de grâce (s)
+                <input v-model.number="settings.delaiGrace" type="number" min="0" max="30" step="0.5" class="bg-transparent border-2 border-[#333] focus:border-[var(--color-blue-main)] p-2 rounded-xl text-center outline-none text-sm font-bold text-[var(--color-beige)] transition-colors" />
+              </label>
+              <label class="flex items-center gap-2 normal-case">
+                <input v-model="settings.bonusPremier" type="checkbox" class="w-4 h-4 accent-[var(--color-blue-main)]" />
+                Bonus au premier
+              </label>
+              <div class="col-span-2 normal-case tracking-normal font-normal text-[var(--color-beige)]">
+                <BaremeApercu :scoring="settings" :duration="settings.roundDuration || 30" />
+              </div>
+            </div>
 
             <div class="flex gap-3 mt-2">
               <button
